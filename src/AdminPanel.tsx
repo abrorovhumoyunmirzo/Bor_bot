@@ -90,18 +90,19 @@ export default function AdminPanel() {
     if(osmLoading)return;
     setOsmLoading(true);setError('');setOsmInfo('');
     try{
-      const initData=telegram()?.initData;
-      if(!initData)throw new Error('Открой панель через Telegram.');
-      const response=await fetch('/api/admin?osmPreview=1',{headers:{'X-Telegram-Init-Data':initData},cache:'no-store'});
+      if(!telegram()?.initData)throw new Error('Открой панель через Telegram.');
+      // Local, prebuilt catalogue: opening the app never waits for Overpass anymore.
+      const response=await fetch('/osm-tashkent.json',{cache:'no-cache'});
+      if(!response.ok)throw new Error('Каталог пока обновляется. Попробуй позже: источники OpenStreetMap сейчас недоступны.');
       const data=await response.json().catch(()=>null);
-      if(!response.ok){
-        if(!data?.error&&response.status===504)throw new Error('Картографический сервер отвечает слишком долго. Попробуй ещё раз через минуту.');
-        throw new Error(data?.error||'Сервис карт временно недоступен (HTTP '+response.status+').');
-      }
-      setOsmResults(data.options||[]);setOsmSelected([]);
-      setOsmInfo('Найдено '+data.totalFound+', возможных дубликатов '+data.duplicates+'. Выбери подходящие места для добавления.');
+      if(!Array.isArray(data?.options))throw new Error('Данные каталога ещё не готовы. Повтори попытку позже.');
+      const existing=new Set(places.filter(p=>p.latitude!==null&&p.longitude!==null).map(p=>p.name.trim().toLowerCase()+'|'+p.latitude!.toFixed(3)+'|'+p.longitude!.toFixed(3)));
+      const all=data.options as OsmVenue[];
+      const options=all.filter(p=>!existing.has(p.name.trim().toLowerCase()+'|'+p.latitude.toFixed(3)+'|'+p.longitude.toFixed(3)));
+      setOsmResults(options);setOsmSelected([]);
+      setOsmInfo('В каталоге '+all.length+' мест. Возможных уже добавленных: '+(all.length-options.length)+'. Отметь подходящие заведения; при сохранении BOR повторно проверит дубликаты.');
       setOsmOpen(true);
-    }catch(e){setError(e instanceof Error?e.message:'Ошибка импорта');}
+    }catch(e){setError(e instanceof Error?e.message:'Ошибка загрузки каталога');}
     finally{setOsmLoading(false)}
   }
   async function osmImport(){
