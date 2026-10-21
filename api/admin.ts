@@ -196,11 +196,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return answer(res,200,{options,totalFound:osm.length,duplicates:osm.length-options.length,attribution:'© OpenStreetMap contributors · ODbL',area:'Центральный Ташкент'});
     }
     if (req.method === 'GET') {
-      const [places,suggestions] = await Promise.all([
-        database('places?select=id,name,district,address,category,latitude,longitude,active,created_at&order=created_at.desc&limit=1000'),
+      const [page1,page2,suggestions] = await Promise.all([
+        database('places?select=id,name,district,address,category,latitude,longitude,active,source_id,created_at&order=id.asc&limit=1000&offset=0'),
+        database('places?select=id,name,district,address,category,latitude,longitude,active,source_id,created_at&order=id.asc&limit=1000&offset=1000'),
         database('place_suggestions?select=id,name,district,address,category,status,created_at&status=eq.pending&order=created_at.asc&limit=100'),
       ]);
-      return answer(res, 200, { places,suggestions });
+      return answer(res, 200, { places:[...page1,...page2],suggestions });
     }
     const payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     if(req.method==='POST'&&payload?.importAction==='osm'){
