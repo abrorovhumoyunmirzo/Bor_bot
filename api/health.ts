@@ -24,14 +24,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (error) {
     const info = error instanceof Error ? error.message : '';
-    const matched = /^Database error (\\d{3})$/.exec(info);
+    const matched = /^Database error ([0-9]{3})$/.exec(info);
     const upstreamStatus = matched ? Number(matched[1]) : null;
+    const errorKind = upstreamStatus ? 'http' : error instanceof TypeError ? 'network_or_url' : error instanceof SyntaxError ? 'invalid_json_response' : 'runtime';
     // Do not expose remote response bodies or any environment variable values.
-    console.error('BOR health database failure', { stage, upstreamStatus, kind: upstreamStatus ? 'HTTP' : 'network_or_runtime' });
+    console.error('BOR health database failure', { stage, upstreamStatus, kind: errorKind });
     return json(res, 503, {
       status: 'database_error',
       stage,
       upstreamStatus,
+      errorKind,
       hint: upstreamStatus === 401 || upstreamStatus === 403 ? 'Check Supabase secret key and its project.' : upstreamStatus === 404 ? 'Check that SQL schema was run in the correct Supabase project.' : upstreamStatus ? 'Check Supabase API response and database schema.' : 'Check SUPABASE_URL, Supabase availability and Vercel network logs.',
     });
   }
