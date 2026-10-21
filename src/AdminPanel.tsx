@@ -1,0 +1,82 @@
+import { useEffect, useState } from 'react';
+import { ArrowLeft, Plus, FloppyDisk, ArrowClockwise, Buildings, CheckCircle, WarningCircle } from '@phosphor-icons/react';
+import { initTelegram, telegram } from './lib/telegram';
+import './admin.css';
+
+type Place = { id: string; name: string; district: string; address: string; category: 'coffee'|'workspace'; active: boolean };
+type Form = Omit<Place, 'id'>;
+const blank: Form = { name: '', district: '', address: '', category: 'coffee', active: true };
+async function request(method: 'GET'|'POST'|'PATCH', body?: unknown) {
+  const initData = telegram()?.initData;
+  if (!initData) throw new Error('Открой админ-панель через своего Telegram-бота.');
+  const response = await fetch('/api/admin', {
+    method, headers: { 'Content-Type': 'application/json', 'X-Telegram-Init-Data': initData },
+    body: body ? JSON.stringify(body) : undefined,
+    cache: 'no-store',
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.error || 'Ошибка сервера BOR.');
+  return data;
+}
+export default function AdminPanel() {
+  const [places, setPlaces] = useState<Place[]>([]);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [form, setForm] = useState<Form>(blank);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [query, setQuery] = useState('');
+  async function refresh() {
+    setLoading(true); setError('');
+    try { const data = await request('GET'); setPlaces(data.places); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Ошибка загрузки'); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { initTelegram(); void refresh(); }, []);
+  function edit(place: Place) {
+    setSelected(place.id);
+    setForm({ name: place.name, district: place.district, address: place.address, category: place.category, active: place.active });
+    setNotice(''); setError('');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function create() { setSelected(null); setForm({ ...blank }); setNotice(''); setError(''); }
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true); setError(''); setNotice('');
+    try {
+      await request(selected ? 'PATCH' : 'POST', selected ? { ...form, id: selected } : form);
+      setNotice(selected ? 'Изменения сохранены.' : 'Заведение добавлено.');
+      await refresh();
+      if (!selected) setForm({ ...blank });
+    } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка сохранения'); }
+    finally { setBusy(false); }
+  }
+  const filtered = places.filter(p => [p.name, p.district, p.address].some(v => v.toLowerCase().includes(query.toLowerCase())));
+  return <div className="shell admin-shell">
+    <header className="header"><a href="/" className="admin-brand">bor<span>.</span></a><span className="admin-label">Управление местами</span></header>
+    <main className="content">
+      <a className="back admin-link" href="/"><ArrowLeft size={18}/> К приложению</a>
+      <div className="eyebrow">BOR / АДМИНИСТРАТОР</div>
+      <h1>Заведения</h1>
+      <p className="intro">Добавляй только существующие места с проверенными адресами. Изменения сразу сохраняются в Supabase.</p>
+      <form className="admin-form" onSubmit={save}>
+        <div className="admin-form-title"><h2>{selected ? 'Редактировать место' : 'Новое заведение'}</h2>{selected && <button type="button" className="admin-textbutton" onClick={create}><Plus size={16}/> Новое</button>}</div>
+        <label>Название<input required minLength={2} maxLength={120} value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} placeholder="Например, название кофейни"/></label>
+        <label>Район<input required minLength={2} maxLength={80} value={form.district} onChange={e => setForm(f => ({...f, district: e.target.value}))} placeholder="Например, Юнусабад"/></label>
+        <label>Адрес<input required minLength={5} maxLength={240} value={form.address} onChange={e => setForm(f => ({...f, address: e.target.value}))} placeholder="Улица, дом, ориентир"/></label>
+        <div className="admin-two">
+          <label>Категория<select value={form.category} onChange={e => setForm(f => ({...f, category: e.target.value as Form['category']}))}><option value="coffee">Кофейня</option><option value="workspace">Рабочее место</option></select></label>
+          <label>Публикация<select value={form.active ? 'yes':'no'} onChange={e => setForm(f => ({...f, active: e.target.value === 'yes'}))}><option value="yes">Активно</option><option value="no">Скрыто</option></select></label>
+        </div>
+        {error && <div className="admin-message admin-error" role="alert"><WarningCircle size={19}/>{error}</div>}
+        {notice && <div className="admin-message admin-success" role="status"><CheckCircle size={19}/>{notice}</div>}
+        <button className="primary" disabled={busy || loading} type="submit"><FloppyDisk size={19}/> {busy ? 'Сохраняем…' : selected ? 'Сохранить изменения' : 'Добавить заведение'}</button>
+      </form>
+      <div className="admin-list-heading"><h2>Все заведения <span>{places.length}</span></h2><button type="button" className="icon-btn refresh" aria-label="Обновить список" onClick={() => void refresh()}><ArrowClockwise size={20}/></button></div>
+      <input className="admin-search" placeholder="Поиск по названию, району, адресу" value={query} onChange={e=>setQuery(e.target.value)} aria-label="Поиск заведений"/>
+      {loading ? <div className="admin-muted">Загружаем данные…</div> : filtered.length ? <div className="admin-rows">{filtered.map(p => <button key={p.id} type="button" className={'admin-row ' + (selected===p.id?'admin-row-selected':'')} onClick={()=>edit(p)}><span className="admin-row-icon"><Buildings size={21}/></span><span className="admin-row-info"><strong>{p.name}</strong><small>{p.district} · {p.address}</small></span><span className={p.active?'admin-pill':'admin-pill admin-pill-off'}>{p.active?'Активно':'Скрыто'}</span></button>)}</div> : <div className="empty"><Buildings size={28}/><h3>{places.length ? 'Ничего не найдено' : 'Пока нет заведений'}</h3><p>{places.length ? 'Попробуй другой запрос.' : 'Добавь первое проверенное место через форму выше.'}</p></div>}
+      <p className="footnote">Админ-доступ определяется на сервере по подписанным данным Telegram. Скрытые места не отображаются в публичном каталоге.</p>
+    </main>
+  </div>;
+}
