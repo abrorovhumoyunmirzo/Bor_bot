@@ -1,2 +1,48 @@
 import type{VercelRequest,VercelResponse}from '@vercel/node';import crypto from 'node:crypto';export const configured=()=>Boolean(process.env.SUPABASE_URL&&(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)&&process.env.TELEGRAM_BOT_TOKEN);export function json(r:VercelResponse,status:number,data:unknown){r.setHeader('Cache-Control','no-store');return r.status(status).json(data)}export async function db(path:string,options:RequestInit={}){const url=process.env.SUPABASE_URL,key=(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY);if(!url||!key)throw Error('Database not configured');const r=await fetch(url.replace(/\/$/,'')+'/rest/v1/'+path,{...options,headers:{apikey:key,...(!key.startsWith('sb_secret_')?{Authorization:'Bearer '+key}:{}),'Content-Type':'application/json',...options.headers}});if(!r.ok)throw Error('Database error '+r.status);return r.status===204?null:r.json()}export function telegramUser(raw:string){const token=process.env.TELEGRAM_BOT_TOKEN;if(!token||!raw||raw.length>8192)return null;try{const p=new URLSearchParams(raw);const hash=p.get('hash');if(!hash||!/^[a-f0-9]{64}$/i.test(hash))return null;p.delete('hash');p.delete('signature');const when=Number(p.get('auth_date'));const now=Math.floor(Date.now()/1000);if(!Number.isInteger(when)||when>now+60||now-when>86400)return null;const check=[...p].sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>k+'='+v).join('\n');const secret=crypto.createHmac('sha256','WebAppData').update(token).digest();const digest=crypto.createHmac('sha256',secret).update(check).digest('hex');if(!crypto.timingSafeEqual(Buffer.from(digest,'hex'),Buffer.from(hash,'hex')))return null;const id=String(JSON.parse(p.get('user')||'null')?.id||'');return /^\d{1,20}$/.test(id)?id:null}catch{return null}}export function guard(req:VercelRequest,res:VercelResponse,method:string){if(req.method!==method){res.setHeader('Allow',method);json(res,405,{error:'Метод не поддерживается'});return false}return true}
-import{type Place,type Crowd,type Wifi}from '../src/lib/types';type Raw={id:string;name:string;district:string;address:string;category:'coffee'|'workspace';latitude:number|null;longitude:number|null};type Report={place_id:string;user_id:string;crowd:Crowd;wifi:Wifi;created_at:string};export default async function handler(req:VercelRequest,res:VercelResponse){if(!guard(req,res,'GET'))return;if(!configured())return json(res,503,{error:'BOR пока не подключён к Supabase или не задан Telegram token. Проверь переменные окружения Vercel.'});try{const [places,reports]=await Promise.all([db('places?select=id,name,district,address,category,latitude,longitude&active=eq.true&order=name.asc&limit=100'),db('reports?select=place_id,user_id,crowd,wifi,created_at&created_at=gte.'+encodeURIComponent(new Date(Date.now()-3600000).toISOString())+'&order=created_at.desc&limit=1000')]) as [Raw[],Report[]];const result:Place[]=places.map(p=>{const recent=new Map<string,Report>();for(const r of reports)if(r.place_id===p.id&&!recent.has(r.user_id))recent.set(r.user_id,r);const rs=[...recent.values()];const current=rs.filter(r=>Date.now()-new Date(r.created_at).getTime()<=30*60000);const counts={quiet:0,moderate:0,busy:0};for(const r of current)counts[r.crowd]++;const order=(Object.keys(counts) as Crowd[]).sort((a,b)=>counts[b]-counts[a]);const conflict=current.length>1&&counts[order[0]]===counts[order[1]];return{...p,crowd:current.length&&!conflict?order[0]:null,wifi:rs.find(r=>r.wifi!=='unknown')?.wifi||null,latestAt:rs[0]?.created_at||null,reportCount:rs.length,verified:false,conflict}});return json(res,200,{mode:'live',places:result})}catch{return json(res,503,{error:'Не удалось загрузить данные'})}}
+
+import type { Place, Crowd, Wifi } from '../src/lib/types';
+
+type RawPlace = { id: string; name: string; district: string; address: string; category: 'coffee' | 'workspace'; latitude: number | null; longitude: number | null };
+type Report = { place_id: string; user_id: string; crowd: Crowd; wifi: Wifi; created_at: string };
+const FRESH_MS = 30 * 60 * 1000;
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!guard(req, res, 'GET')) return;
+  if (!configured()) return json(res, 503, { error: 'BOR не подключён к Supabase. Проверь настройки Vercel.' });
+  try {
+    const since = new Date(Date.now() - FRESH_MS).toISOString();
+    const [places, reports] = await Promise.all([
+      db('places?select=id,name,district,address,category,latitude,longitude&active=eq.true&order=name.asc&limit=200'),
+      db('reports?select=place_id,user_id,crowd,wifi,created_at&created_at=gte.' + encodeURIComponent(since) + '&order=created_at.desc&limit=5000'),
+    ]) as [RawPlace[], Report[]];
+    const byPlace = new Map<string, Map<string, Report>>();
+    for (const report of reports) {
+      let users = byPlace.get(report.place_id);
+      if (!users) { users = new Map<string, Report>(); byPlace.set(report.place_id, users); }
+      // Reports arrive newest-first. One vote per unique user in the 30-min window.
+      if (!users.has(report.user_id)) users.set(report.user_id, report);
+    }
+    const result: Place[] = places.map(place => {
+      const current = [...(byPlace.get(place.id)?.values() || [])];
+      const crowdVotes: Record<Crowd, number> = { quiet: 0, moderate: 0, busy: 0 };
+      const wifiVotes: Record<Wifi, number> = { good: 0, slow: 0, bad: 0, unknown: 0 };
+      for (const report of current) { crowdVotes[report.crowd]++; wifiVotes[report.wifi]++; }
+      const orderedCrowds = (Object.keys(crowdVotes) as Crowd[]).sort((a,b) => crowdVotes[b] - crowdVotes[a]);
+      const wifiOptions = (['good','slow','bad'] as Wifi[]).sort((a,b) => wifiVotes[b] - wifiVotes[a]);
+      const crowdConflict = current.length > 1 && crowdVotes[orderedCrowds[0]] === crowdVotes[orderedCrowds[1]];
+      const wifiConflict = wifiVotes[wifiOptions[0]] > 0 && wifiVotes[wifiOptions[0]] === wifiVotes[wifiOptions[1]];
+      return {
+        ...place,
+        crowd: current.length && !crowdConflict ? orderedCrowds[0] : null,
+        wifi: wifiVotes[wifiOptions[0]] > 0 && !wifiConflict ? wifiOptions[0] : null,
+        latestAt: current[0]?.created_at || null,
+        reportCount: current.length,
+        verified: false,
+        conflict: crowdConflict || wifiConflict,
+      };
+    });
+    return json(res, 200, { mode: 'live', places: result });
+  } catch (error) {
+    console.error('BOR places fetch failed', error instanceof Error ? error.name : 'unknown');
+    return json(res, 503, { error: 'Не удалось загрузить заведения. Повтори попытку.' });
+  }
+}
