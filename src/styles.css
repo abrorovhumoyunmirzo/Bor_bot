@@ -141,3 +141,29 @@ input,select,textarea{font-size:16px}
 .map-quick-actions>a{background:transparent;color:#b8ef78}
 .map-quick-actions>button:only-child{grid-column:1/-1}
 .map-quick-card>p{font-size:10px;color:#a7b6aa;line-height:1.5;margin:10px 0 0}
+
+
+/* Map marker preview: immediately visible floating bottom sheet, above the mobile tab bar. */
+.map-quick-sheet{
+ position:fixed;z-index:30;left:50%;bottom:calc(70px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);
+ width:calc(100% - 24px);max-width:536px;max-height:min(340px,calc(100dvh - 125px - env(safe-area-inset-bottom,0px)));
+ overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+ padding:16px 16px 14px;margin:0;
+ background:#202e25;border:1px solid #728b62;border-radius:20px;
+ box-shadow:0 0 0 1px rgba(184,239,120,.08),0 12px 45px rgba(0,0,0,.65);
+ animation:map-sheet-rise .18s ease-out;
+}
+.map-quick-sheet .map-quick-label{display:flex;align-items:center;gap:7px;padding-right:35px}
+.map-sheet-dot{height:7px;width:7px;flex-shrink:0;background:#b8ef78;border-radius:50%;box-shadow:0 0 0 3px #314734}
+.map-quick-sheet .map-quick-dismiss{top:6px;right:8px;border-radius:50%;background:#2c3e31;color:#e2ebdf;font-size:22px}
+.map-quick-sheet .map-quick-top{padding-right:14px}
+.map-quick-sheet .map-quick-actions>button,.map-quick-sheet .map-quick-actions>a{min-height:49px;font-size:13px}
+.map-quick-sheet .map-quick-status{margin:10px 0}
+.map-quick-sheet>p{margin-top:8px}
+@keyframes map-sheet-rise{from{opacity:.4;translate:0 12px}to{opacity:1;translate:0 0}}
+@media(max-height:660px){
+ .map-quick-sheet{bottom:calc(64px + env(safe-area-inset-bottom,0px));padding:12px 13px;max-height:calc(100dvh - 105px - env(safe-area-inset-bottom,0px))}
+ .map-quick-sheet .map-quick-status{margin:8px 0}
+ .map-quick-sheet .map-quick-status span{padding:6px 8px}
+}
+@media(prefers-reduced-motion:reduce){.map-quick-sheet{animation:none}}
