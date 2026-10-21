@@ -71,34 +71,65 @@ function parsePlace(body: unknown) {
 
 type OsmVenue={sourceId:string;name:string;district:string;address:string;category:'cafe'|'restaurant';latitude:number;longitude:number};
 async function fetchOsmVenues():Promise<OsmVenue[]>{
- // A bounded downtown Tashkent excerpt avoids heavy requests to the shared Overpass service.
- const query='[out:json][timeout:18];(nwr["amenity"~"^(restaurant|cafe)$"]["name"](41.245,69.18,41.37,69.365););out center 350;';
- const endpoints=['https://overpass.private.coffee/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
- let lastError='OSM недоступен';
+ // Smaller city-centre query is resilient on serverless plans and public Overpass nodes.
+ const query='[out:json][timeout:9];(node["amenity"~"^(restaurant|cafe)$"]["name"](41.275,69.225,41.345,69.325);way["amenity"~"^(restaurant|cafe)$"]["name"](41.275,69.225,41.345,69.325););out center 140;';
+ const endpoints=[
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://overpass-api.de/api/interpreter'
+ ];
+ const failures:string[]=[];
  for(const endpoint of endpoints){
   try{
-   const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','User-Agent':'BOR-Tashkent-venue-import/1.0'},body:new URLSearchParams({data:query}),signal:AbortSignal.timeout(23000)});
-   if(!response.ok){lastError='OSM ответил '+response.status;continue;}
+   const response=await fetch(endpoint,{
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:new URLSearchParams({data:query}).toString(),
+    signal:AbortSignal.timeout(8500)
+   });
+   if(!response.ok){failures.push(String(response.status));continue}
    const data=await response.json() as {elements?:Array<{type:string;id:number;lat?:number;lon?:number;center?:{lat:number;lon:number};tags?:Record<string,string>}>};
-   if(!Array.isArray(data.elements))throw Error('Некорректный ответ OSM');
+   if(!Array.isArray(data.elements))throw new Error('Invalid OSM response');
    const result:OsmVenue[]=[];
    for(const el of data.elements){
-    const t=el.tags||{},lat=el.lat??el.center?.lat,lon=el.lon??el.center?.lon;
-    const name=(t['name:ru']||t.name||'').trim();
-    if(!name||name.length<2||name.length>120||typeof lat!=='number'||typeof lon!=='number'||!Number.isFinite(lat)||!Number.isFinite(lon))continue;
-    const amenity=t.amenity;
-    if(amenity!=='cafe'&&amenity!=='restaurant')continue;
-    const street=(t['addr:street']||'').trim(),house=(t['addr:housenumber']||'').trim();
+    const tags=el.tags||{},latitude=el.lat??el.center?.lat,longitude=el.lon??el.center?.lon;
+    const name=(tags['name:ru']||tags.name||'').trim();
+    if(name.length<2||name.length>120||!Number.isFinite(latitude)||!Number.isFinite(longitude)||typeof latitude!=='number'||typeof longitude!=='number')continue;
+    if(tags.amenity!=='cafe'&&tags.amenity!=='restaurant')continue;
+    const street=(tags['addr:street']||'').trim(),house=(tags['addr:housenumber']||'').trim();
     const fullAddress=[street,house].filter(Boolean).join(', ');
     const address=(fullAddress||'Адрес не указан в OpenStreetMap').slice(0,240);
-    const district=(t['addr:suburb']||t['addr:district']||'Ташкент').trim().slice(0,80);
-    result.push({sourceId:el.type+'/'+el.id,name,district:district.length>=2?district:'Ташкент',address,category:amenity,latitude:lat,longitude:lon});
+    const district=(tags['addr:suburb']||tags['addr:district']||'Ташкент').trim().slice(0,80);
+    result.push({sourceId:el.type+'/'+el.id,name,district:district.length>=2?district:'Ташкент',address,category:tags.amenity,latitude,longitude});
    }
    return result.slice(0,100);
-  }catch(e){lastError=e instanceof Error?e.name:'OSM недоступен';}
+  }catch(e){failures.push(e instanceof Error?e.name:'NetworkError')}
  }
- throw new Error('Не удалось получить OpenStreetMap: '+lastError);
+ console.error('OSM preview provider failures:',failures.join(',').slice(0,90));
+ throw new Error('OSM_PROVIDER_UNAVAILABLE');
 }
+function validatedOsmInput(raw:unknown):OsmVenue[]|null{
+ if(!Array.isArray(raw)||raw.length<1||raw.length>80)return null;
+ const normalized:OsmVenue[]=[];
+ const seen=new Set<string>();
+ for(const item of raw){
+  if(!item||typeof item!=='object')return null;
+  const p=item as Record<string,unknown>;
+  const sourceId=p.sourceId,name=typeof p.name==='string'?p.name.trim():'';
+  const district=typeof p.district==='string'?p.district.trim():'';
+  const address=typeof p.address==='string'?p.address.trim():'';
+  const latitude=p.latitude,longitude=p.longitude;
+  if(typeof sourceId!=='string'||!/^(node|way|relation)\/[0-9]{1,15}$/.test(sourceId)||
+   seen.has(sourceId)||name.length<2||name.length>120||district.length<2||district.length>80||
+   address.length<5||address.length>240||(p.category!=='cafe'&&p.category!=='restaurant')||
+   typeof latitude!=='number'||typeof longitude!=='number'||!Number.isFinite(latitude)||!Number.isFinite(longitude)||
+   latitude<41.20||latitude>41.45||longitude<69.10||longitude>69.45)return null;
+  seen.add(sourceId);
+  normalized.push({sourceId,name,district,address,category:p.category,latitude,longitude});
+ }
+ return normalized;
+}
+
 function geoDistanceMeters(a:{latitude:number;longitude:number},b:{latitude:number;longitude:number}){
  const rad=Math.PI/180,dlat=(a.latitude-b.latitude)*rad,dlon=(a.longitude-b.longitude)*rad;
  const v=Math.sin(dlat/2)**2+Math.cos(a.latitude*rad)*Math.cos(b.latitude*rad)*Math.sin(dlon/2)**2;
@@ -158,18 +189,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     if(req.method==='POST'&&payload?.importAction==='osm'){
-      const ids=payload.sourceIds;
-      if(!Array.isArray(ids)||ids.length<1||ids.length>80||ids.some((id:unknown)=>typeof id!=='string'||!/^(node|way|relation)\/[0-9]{1,15}$/.test(id)))
-        return answer(res,400,{error:'Выбери от 1 до 80 мест из списка.'});
-      const [osm,existing]=await Promise.all([fetchOsmVenues(),database('places?select=name,latitude,longitude,source_id,source_type&limit=2500')]);
-      const selected=new Set(ids);
-      const verified=dedupeOsm(osm.filter(p=>selected.has(p.sourceId)),existing||[]);
-      if(!verified.length)return answer(res,200,{ok:true,added:0,skipped:ids.length});
+      const selected=validatedOsmInput(payload.venues);
+      if(!selected)return answer(res,400,{error:'Выбери от 1 до 80 мест из результатов поиска OpenStreetMap.'});
+      const existing=await database('places?select=name,latitude,longitude,source_id,source_type&limit=2500');
+      const verified=dedupeOsm(selected,existing||[]);
+      if(!verified.length)return answer(res,200,{ok:true,added:0,skipped:selected.length});
       // Imported OSM venues have real names and coordinates but *no* fabricated crowd/Wi-Fi status.
       // Keep address uncertainty explicit until the owner or a visitor verifies it.
       const rows=verified.map(p=>({name:p.name,district:p.district,address:p.address,category:p.category,active:true,latitude:p.latitude,longitude:p.longitude,source_type:'osm',source_id:p.sourceId}));
       await database('places',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(rows)});
-      return answer(res,201,{ok:true,added:rows.length,skipped:ids.length-rows.length});
+      return answer(res,201,{ok:true,added:rows.length,skipped:selected.length-rows.length});
     }
     if(req.method==='PATCH'&&payload?.suggestionAction){
       const action=payload.suggestionAction;
@@ -208,7 +237,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!changed?.length) return answer(res, 404, { error: 'Заведение не найдено.' });
     return answer(res, 200, { place: changed[0] });
   } catch (error) {
+    const message=error instanceof Error?error.message:'';
     console.error('BOR admin request failed:', error instanceof Error ? error.name : 'unknown');
-    return answer(res, 503, { error: 'Ошибка базы данных. Попробуй позже.' });
+    if(message==='OSM_PROVIDER_UNAVAILABLE')return answer(res,503,{code:'osm_unavailable',error:'OpenStreetMap сейчас не отвечает. Попробуй через минуту — уже добавленные заведения не затронуты.'});
+    return answer(res, 503, { code:'admin_database_error',error: 'Не удалось обработать данные. Попробуй позже.' });
   }
 }
