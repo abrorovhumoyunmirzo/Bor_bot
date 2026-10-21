@@ -224,3 +224,12 @@ input,select,textarea{font-size:16px}
 .category-filters button.active{background:#b8ef78;border-color:#b8ef78;color:#18291b;font-weight:800}
 .category-filters button:focus-visible,.category-toolbar button:focus-visible{outline:2px solid #b8ef78;outline-offset:2px}
 @media(max-width:360px){.category-filters button{font-size:11px;padding:0 12px}}
+
+
+/* Map clustering uses one circular marker per nearby group, not hundreds of overlapping taps. */
+.venue-map .bor-cluster-icon{border:0!important;background:transparent!important}
+.bor-cluster-count{display:grid;place-items:center;width:100%;height:100%;border-radius:50%;border:3px solid #dbf5c7;background:#2c5739;color:#fff;font-size:14px;font-weight:800;box-shadow:0 0 0 5px rgba(184,239,120,.24),0 3px 10px rgba(0,0,0,.35);font-variant-numeric:tabular-nums}
+.bor-cluster-picker{display:grid;gap:4px;max-height:190px;overflow-y:auto}
+.bor-cluster-picker button{display:block;width:100%;text-align:left;min-height:40px;border:0;border-bottom:1px solid #dce5d9;padding:8px 5px;color:#1c3425;background:#fff;font-weight:650;font-size:13px;white-space:normal;overflow-wrap:anywhere}
+.venue-map .leaflet-popup-content{margin:12px}
+.venue-map .leaflet-popup-content-wrapper{border-radius:13px}
