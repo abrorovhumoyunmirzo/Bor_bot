@@ -51,6 +51,7 @@ export default function AdminPanel() {
   const [osmInfo,setOsmInfo]=useState('');
   const [osmQuery,setOsmQuery]=useState('');
   const [osmOffset,setOsmOffset]=useState(0);
+  const [archiveConfirm,setArchiveConfirm]=useState(false);
   async function refresh() {
     setLoading(true); setError('');
     try { const data = await request('GET'); setPlaces(data.places);setSuggestions(data.suggestions||[]); }
@@ -59,13 +60,13 @@ export default function AdminPanel() {
   }
   useEffect(() => { initTelegram(); if (telegram()?.initData) { void refresh(); } else { setLoading(false); } }, []);
   function edit(place: Place) {
-    setSelected(place.id);
+    setSelected(place.id);setArchiveConfirm(false);
     setLocationText('');setLocationHelp('');
     setForm({ name: place.name, district: place.district, address: place.address, category: place.category, active: place.active, latitude: place.latitude, longitude: place.longitude });
     setNotice(''); setError('');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
-  function create() { setLocationText('');setLocationHelp('');setSelected(null); setForm({ ...blank }); setNotice(''); setError(''); }
+  function create() { setArchiveConfirm(false);setLocationText('');setLocationHelp('');setSelected(null); setForm({ ...blank }); setNotice(''); setError(''); }
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setError(''); setNotice('');
@@ -86,6 +87,18 @@ export default function AdminPanel() {
       await refresh();
       setNotice(action==='approve'?'Заведение добавлено в каталог. Проверь координаты в списке ниже.':'Предложение отклонено.');
     }catch(e){setError(e instanceof Error?e.message:'Ошибка проверки');}
+    finally{setBusy(false)}
+  }
+  async function setPlaceArchived(archive:boolean){
+    if(!selected||busy)return;
+    setBusy(true);setError('');setNotice('');
+    try{
+      await request('PATCH',{placeAction:archive?'archive':'restore',id:selected});
+      setForm(old=>({...old,active:!archive}));
+      setArchiveConfirm(false);
+      await refresh();
+      setNotice(archive?'Заведение скрыто с карты. Его можно восстановить в любое время.':'Заведение снова опубликовано.');
+    }catch(e){setError(e instanceof Error?e.message:'Не удалось изменить публикацию.');}
     finally{setBusy(false)}
   }
   async function osmPreview(){
@@ -118,7 +131,7 @@ export default function AdminPanel() {
       const response=await fetch('/api/admin',{method:'POST',headers:{'X-Telegram-Init-Data':initData,'Content-Type':'application/json'},body:JSON.stringify({importAction:'osm',venues:osmResults.filter(p=>osmSelected.includes(p.sourceId))})});
       const data=await response.json().catch(()=>null);
       if(!response.ok)throw new Error(data?.error||'Не удалось добавить места ('+response.status+').');
-      setOsmInfo('Добавлено: '+data.added+'. Пропущено дубликатов: '+data.skipped+'.');
+      setOsmInfo('Добавлено: '+data.added+'. Пропущено некорректных точек или дубликатов: '+data.skipped+'.');
       setOsmResults([]);setOsmSelected([]);
       await refresh();
     }catch(e){setError(e instanceof Error?e.message:'Ошибка импорта');}
@@ -183,6 +196,10 @@ export default function AdminPanel() {
         {error && <div className="admin-message admin-error" role="alert"><WarningCircle size={19}/>{error}</div>}
         {notice && <div className="admin-message admin-success" role="status"><CheckCircle size={19}/>{notice}</div>}
         <button className="primary" disabled={busy || loading || !telegramAuthorized} type="submit"><FloppyDisk size={19}/> {busy ? 'Сохраняем…' : selected ? 'Сохранить изменения' : 'Добавить заведение'}</button>
+        {selected&&<div className="admin-archive">
+          {!archiveConfirm&&<button type="button" disabled={busy||loading} className={form.active?'admin-archive-toggle':'admin-restore-toggle'} onClick={()=>form.active?setArchiveConfirm(true):void setPlaceArchived(false)}>{form.active?'Убрать заведение с карты':'Восстановить на карте'}</button>}
+          {archiveConfirm&&<div className="admin-archive-warning" role="group" aria-label="Подтверждение скрытия"><strong>Скрыть это заведение?</strong><p>Оно исчезнет из публичной карты. Отчёты останутся в базе, а заведение можно будет восстановить.</p><div><button type="button" disabled={busy} onClick={()=>setArchiveConfirm(false)}>Отмена</button><button type="button" disabled={busy} onClick={()=>void setPlaceArchived(true)}>Да, убрать</button></div></div>}
+        </div>}
       </form>
       <div className="admin-list-heading"><h2>Все заведения <span>{places.length}</span></h2><button type="button" className="icon-btn refresh" aria-label="Обновить список" onClick={() => void refresh()}><ArrowClockwise size={20}/></button></div>
       <input className="admin-search" placeholder="Поиск по названию, району, адресу" value={query} onChange={e=>setQuery(e.target.value)} aria-label="Поиск заведений"/>
