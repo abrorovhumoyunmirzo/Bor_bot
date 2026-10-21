@@ -2,9 +2,20 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, Plus, FloppyDisk, ArrowClockwise, Buildings, CheckCircle, WarningCircle } from '@phosphor-icons/react';
 import { initTelegram, telegram } from './lib/telegram';
 import './admin.css';
+import { VenueMap } from './VenueMap';
 
 type Place = { id: string; name: string; district: string; address: string; category: 'coffee'|'workspace'; active: boolean; latitude: number | null; longitude: number | null };
 type Form = Omit<Place, 'id'>;
+function readLocation(value: string): { latitude: number; longitude: number } | null {
+ const text=value.trim();
+ const direct=text.match(/(-?\d{1,2}\.\d+)\s*[,;\s]\s*(-?\d{1,3}\.\d+)/);
+ const at=text.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+ const tagged=text.match(/!3d(-?\d+\.\d+).*?!4d(-?\d+\.\d+)/);
+ const matched=at||tagged||direct;
+ if(!matched)return null;
+ const latitude=Number(matched[1]),longitude=Number(matched[2]);
+ return Number.isFinite(latitude)&&Number.isFinite(longitude)&&Math.abs(latitude)<=90&&Math.abs(longitude)<=180?{latitude,longitude}:null;
+}
 const blank: Form = { name: '', district: '', address: '', category: 'coffee', active: true, latitude: null, longitude: null };
 async function request(method: 'GET'|'POST'|'PATCH', body?: unknown) {
   const initData = telegram()?.initData;
@@ -27,6 +38,9 @@ export default function AdminPanel() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [query, setQuery] = useState('');
+  const [locationText,setLocationText]=useState('');
+  const [locationHelp,setLocationHelp]=useState('');
+  const [locationExpanded,setLocationExpanded]=useState(false);
   async function refresh() {
     setLoading(true); setError('');
     try { const data = await request('GET'); setPlaces(data.places); }
@@ -36,11 +50,12 @@ export default function AdminPanel() {
   useEffect(() => { initTelegram(); if (telegram()?.initData) { void refresh(); } else { setLoading(false); } }, []);
   function edit(place: Place) {
     setSelected(place.id);
+    setLocationText('');setLocationHelp('');
     setForm({ name: place.name, district: place.district, address: place.address, category: place.category, active: place.active, latitude: place.latitude, longitude: place.longitude });
     setNotice(''); setError('');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
-  function create() { setSelected(null); setForm({ ...blank }); setNotice(''); setError(''); }
+  function create() { setLocationText('');setLocationHelp('');setSelected(null); setForm({ ...blank }); setNotice(''); setError(''); }
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setError(''); setNotice('');
@@ -80,13 +95,15 @@ export default function AdminPanel() {
           <label>Публикация<select value={form.active ? 'yes':'no'} onChange={e => setForm(f => ({...f, active: e.target.value === 'yes'}))}><option value="yes">Активно</option><option value="no">Скрыто</option></select></label>
         </div>
         <div className="admin-location-box">
-          <div className="admin-location-title"><strong>Точка на карте</strong><span>Необязательно</span></div>
-          <p>Укажи точные координаты входа в заведение из карт. Оба поля заполняются вместе; без них место остаётся в каталоге без маршрута.</p>
-          <div className="admin-two">
-            <label>Широта<input type="number" inputMode="decimal" step="any" min="-90" max="90" placeholder="41.311081" value={form.latitude ?? ''} onChange={e=>setForm(f=>({...f,latitude:e.target.value===''?null:Number(e.target.value)}))}/></label>
-            <label>Долгота<input type="number" inputMode="decimal" step="any" min="-180" max="180" placeholder="69.240562" value={form.longitude ?? ''} onChange={e=>setForm(f=>({...f,longitude:e.target.value===''?null:Number(e.target.value)}))}/></label>
-          </div>
-          {form.latitude!==null&&form.longitude!==null&&<a className="admin-map-preview" target="_blank" rel="noopener noreferrer" href={`https://www.google.com/maps/search/?api=1&query=${form.latitude}%2C${form.longitude}`}>Проверить точку в Google Maps ↗</a>}
+          <div className="admin-location-title"><strong>Местоположение</strong><span>Необязательно</span></div>
+          <p>Самый простой способ — коснись нужной точки на карте. Или вставь координаты через запятую / полную ссылку Google Maps.</p>
+          <label className="admin-location-paste">Ссылка или координаты
+            <input type="text" autoComplete="off" placeholder="41.311081, 69.240562" value={locationText} onChange={e=>{const value=e.target.value;setLocationText(value);const p=readLocation(value);if(p){setForm(f=>({...f,...p}));setLocationHelp('Координаты определены — проверь точку на карте.')}else if(value.trim())setLocationHelp('Вставь две координаты через запятую или полную ссылку с координатами. Короткие ссылки maps.app.goo.gl не содержат координаты.');else setLocationHelp('')}}/>
+          </label>
+          {locationHelp&&<p className="admin-location-help">{locationHelp}</p>}
+          <button className="admin-textbutton admin-map-toggle" type="button" onClick={()=>setLocationExpanded(v=>!v)}>{locationExpanded?'Свернуть карту':'Указать точку на карте'}</button>
+          {locationExpanded&&<><VenueMap compact picked={form.latitude!==null&&form.longitude!==null?{latitude:form.latitude,longitude:form.longitude}:null} onPick={(latitude,longitude)=>{setForm(f=>({...f,latitude:Number(latitude.toFixed(6)),longitude:Number(longitude.toFixed(6))}));setLocationHelp('Точка выбрана. Проверь, что это вход в заведение.')}}/><p>Нажми на нужное здание или вход — координаты сохранятся в форму.</p></>}
+          {form.latitude!==null&&form.longitude!==null&&<div className="admin-location-coords"><span>{form.latitude.toFixed(6)}, {form.longitude.toFixed(6)}</span><button type="button" onClick={()=>{setForm(f=>({...f,latitude:null,longitude:null}));setLocationText('');setLocationHelp('')}}>Очистить</button></div>}
         </div>
         {error && <div className="admin-message admin-error" role="alert"><WarningCircle size={19}/>{error}</div>}
         {notice && <div className="admin-message admin-success" role="status"><CheckCircle size={19}/>{notice}</div>}
