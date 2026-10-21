@@ -45,7 +45,11 @@ async function database(path: string, init: RequestInit = {}) {
     },
     signal: AbortSignal.timeout(8000),
   });
-  if (!response.ok) throw new Error('Database status ' + response.status);
+  if (!response.ok) {
+    const raw=await response.text().catch(()=>'');
+    let code='unknown';try{const info=JSON.parse(raw);if(typeof info?.code==='string')code=info.code.slice(0,30)}catch{}
+    throw new Error('Database status '+response.status+' code '+code);
+  }
   const text=await response.text();return text?JSON.parse(text):null;
 }
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
@@ -215,10 +219,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           // Require manual review when the name already exists, to avoid duplicates.
           return answer(res,409,{error:'Заведение с таким названием уже есть. Проверь каталог перед добавлением.'});
         }
-        await database('places',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({name:suggestion.name,district:suggestion.district,address:suggestion.address,category:suggestion.category,active:true,latitude:null,longitude:null})});
+        await database('places',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({name:suggestion.name,district:suggestion.district,address:suggestion.address,category:suggestion.category,active:true,latitude:null,longitude:null})});
       }
       await database('place_suggestions?id=eq.'+suggestionId+'&status=eq.pending',{
-        method:'PATCH',headers:{Prefer:'return=representation'},
+        method:'PATCH',headers:{Prefer:'return=minimal'},
         body:JSON.stringify({status:action==='approve'?'approved':'rejected',reviewed_at:new Date().toISOString()}),
       });
       return answer(res,200,{ok:true});
@@ -226,20 +230,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const place = parsePlace(payload);
     if (!place) return answer(res, 400, { error: 'Проверь название, район, адрес, категорию, статус и координаты (нужны обе либо ни одной).' });
     if (req.method === 'POST') {
-      const created = await database('places', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(place) });
-      return answer(res, 201, { place: created?.[0] });
+      await database('places', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(place) });
+      return answer(res, 201, { ok: true });
     }
     const placeId = payload?.id;
     if (typeof placeId !== 'string' || !uuid.test(placeId)) return answer(res, 400, { error: 'Неверный ID заведения.' });
-    const changed = await database('places?id=eq.' + placeId, {
-      method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(place),
+    await database('places?id=eq.' + placeId, {
+      method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(place),
     });
-    if (!changed?.length) return answer(res, 404, { error: 'Заведение не найдено.' });
-    return answer(res, 200, { place: changed[0] });
+    return answer(res, 200, { ok: true });
   } catch (error) {
     const message=error instanceof Error?error.message:'';
     console.error('BOR admin request failed:', error instanceof Error ? error.name : 'unknown');
     if(message==='OSM_PROVIDER_UNAVAILABLE')return answer(res,503,{code:'osm_unavailable',error:'OpenStreetMap сейчас не отвечает. Попробуй через минуту — уже добавленные заведения не затронуты.'});
+    const diagnostic=message.match(/Database status (\d{3}) code ([A-Za-z0-9_]+)/);
+    if(diagnostic)return answer(res,503,{code:'db_'+diagnostic[1]+'_'+diagnostic[2],error:'Сохранение не прошло проверку базы ('+diagnostic[1]+' / '+diagnostic[2]+').'});
     return answer(res, 503, { code:'admin_database_error',error: 'Не удалось обработать данные. Попробуй позже.' });
   }
 }
