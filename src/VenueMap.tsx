@@ -10,7 +10,7 @@ export function markerStatus(place:Place,now=Date.now()):MarkerStatus{const time
 const markerColors:Record<MarkerStatus,string>={quiet:'#59c98c',moderate:'#efbf58',busy:'#f17b72',conflict:'#cfa7f4',unknown:'#84968b'};
 const valid=(p: {latitude?:number|null;longitude?:number|null})=>typeof p.latitude==='number'&&typeof p.longitude==='number'&&Number.isFinite(p.latitude)&&Number.isFinite(p.longitude);
 export function VenueMap({ places=[],userLocation=null,selectedId=null,onSelect,onPick,picked=null,compact=false }: Props) {
- const element=useRef<HTMLDivElement>(null);const mapRef=useRef<any>(null);const layers=useRef<any>(null);const viewportKeyRef=useRef('');const onSelectRef=useRef(onSelect);onSelectRef.current=onSelect;const[interactive,setInteractive]=useState(false);
+ const element=useRef<HTMLDivElement>(null);const mapRef=useRef<any>(null);const layers=useRef<any>(null);const renderRef=useRef<()=>void>(()=>{});const viewportKeyRef=useRef('');const onSelectRef=useRef(onSelect);onSelectRef.current=onSelect;const[interactive,setInteractive]=useState(false);
  useEffect(()=>{
   if(!element.current||!window.L)return;
   const L=window.L;
@@ -25,32 +25,78 @@ export function VenueMap({ places=[],userLocation=null,selectedId=null,onSelect,
  },[Boolean(onPick)]);
  useEffect(()=>{const map=mapRef.current;if(!map)return;if(interactive){map.dragging.enable();map.touchZoom.enable();map.doubleClickZoom.enable();map.boxZoom.enable();setTimeout(()=>map.invalidateSize(),0)}else{map.dragging.disable();map.touchZoom.disable();map.doubleClickZoom.disable();map.boxZoom.disable()}},[interactive]);
  useEffect(()=>{
-  const map=mapRef.current, L=window.L,layer=layers.current;
+  const map=mapRef.current,L=window.L,layer=layers.current;
   if(!map||!L||!layer)return;
-  layer.clearLayers();const bounds:any[]=[];
-  for(const place of places){if(!valid(place))continue;
-   const pos:[number,number]=[place.latitude!,place.longitude!];bounds.push(pos);
-   const selected=selectedId===place.id;
-   const status=markerStatus(place);const color=markerColors[status];
-   const marker=L.circleMarker(pos,{radius:selected?12:10,color:selected?'#16251b':'#ffffff',weight:selected?4:2,fillColor:color,fillOpacity:1}).addTo(layer);
-   marker.bindTooltip(place.name,{direction:'top',offset:[0,-7]});
-   marker.on('click',()=>onSelectRef.current?.(place.id));
-  }
-  if(picked&&valid(picked)){
-   const pos:[number,number]=[picked.latitude,picked.longitude];bounds.push(pos);
-   L.circleMarker(pos,{radius:11,color:'#18291b',weight:3,fillColor:'#b8ef78',fillOpacity:1}).addTo(layer).bindTooltip('Выбранная точка',{permanent:false,direction:'top'});
-  }
+  const points=places.filter(p=>valid(p)&&Math.abs(p.latitude!)<=90&&Math.abs(p.longitude!)<=180);
+  const bounds=points.map(p=>[p.latitude!,p.longitude!]);
+  // Group markers into 62px screen cells at the current zoom. No extra map library needed.
+  // The admin point picker never clusters or interferes with choosing exact coordinates.
+  const render=()=>{
+   if(!mapRef.current)return;
+   layer.clearLayers();
+   const zoom=map.getZoom(), buckets=new Map<string,Place[]>();
+   for(const place of points){
+    const projected=map.project([place.latitude!,place.longitude!],zoom);
+    const key=onPick?'single-'+place.id:Math.floor(projected.x/62)+':'+Math.floor(projected.y/62);
+    const items=buckets.get(key);
+    if(items)items.push(place);else buckets.set(key,[place]);
+   }
+   for(const items of buckets.values()){
+    if(items.length===1){
+     const place=items[0],pos:[number,number]=[place.latitude!,place.longitude!];
+     const selected=selectedId===place.id,color=markerColors[markerStatus(place)];
+     const marker=L.circleMarker(pos,{radius:selected?12:10,color:selected?'#16251b':'#ffffff',weight:selected?4:2,fillColor:color,fillOpacity:1}).addTo(layer);
+     marker.bindTooltip(place.name,{direction:'top',offset:[0,-7]});
+     marker.on('click',()=>onSelectRef.current?.(place.id));
+    }else{
+     const centerLat=items.reduce((sum,p)=>sum+p.latitude!,0)/items.length;
+     const centerLon=items.reduce((sum,p)=>sum+p.longitude!,0)/items.length;
+     const size=items.length>15?48:42;
+     const marker=L.marker([centerLat,centerLon],{icon:L.divIcon({className:'bor-cluster-icon',html:'<span class="bor-cluster-count">'+items.length+'</span>',iconSize:[size,size],iconAnchor:[size/2,size/2]})}).addTo(layer);
+     marker.bindTooltip(items.length+' заведений · Нажми, чтобы приблизить',{direction:'top'});
+     marker.on('click',()=>{
+      if(map.getZoom()<18){
+       const groupBounds=L.latLngBounds(items.map(p=>[p.latitude!,p.longitude!]));
+       const next=Math.min(18,map.getZoom()+2);
+       if(groupBounds.getNorthEast().equals(groupBounds.getSouthWest()))map.setView([centerLat,centerLon],next,{animate:true});
+       else map.fitBounds(groupBounds,{padding:[35,35],maxZoom:next,animate:true});
+      }else{
+       // Identical coordinates cannot be separated by zoom: offer a safe text-only chooser.
+       const container=document.createElement('div');
+       container.className='bor-cluster-picker';
+       items.slice(0,40).forEach(place=>{
+        const btn=document.createElement('button');
+        btn.type='button';btn.textContent=place.name;
+        btn.addEventListener('click',()=>{onSelectRef.current?.(place.id);map.closePopup()});
+        container.appendChild(btn);
+       });
+       L.popup({minWidth:170,maxHeight:220}).setLatLng([centerLat,centerLon]).setContent(container).openOn(map);
+      }
+     });
+    }
+   }
+   if(picked&&valid(picked)){
+    L.circleMarker([picked.latitude,picked.longitude],{radius:11,color:'#18291b',weight:3,fillColor:'#b8ef78',fillOpacity:1}).addTo(layer).bindTooltip('Выбранная точка');
+   }
+   if(userLocation&&valid(userLocation)){
+    L.circleMarker([userLocation.latitude,userLocation.longitude],{radius:7,color:'#fff',weight:3,fillColor:'#438dfb',fillOpacity:1}).addTo(layer).bindTooltip('Вы здесь');
+   }
+  };
+  renderRef.current=render;
+  map.on('zoomend',render);render();
   const viewportKey=JSON.stringify({points:bounds,user:userLocation&&valid(userLocation)?userLocation:null,compact});
   const shouldRecenter=viewportKeyRef.current!==viewportKey;
   viewportKeyRef.current=viewportKey;
-  if(userLocation&&valid(userLocation)){
-   const pos:[number,number]=[userLocation.latitude,userLocation.longitude];
-   L.circleMarker(pos,{radius:7,color:'#ffffff',weight:3,fillColor:'#438dfb',fillOpacity:1}).addTo(layer).bindTooltip('Вы здесь');
-   if(shouldRecenter){if(!compact)map.setView(pos,13);else if(bounds.length===0)map.setView(pos,14)}
-  } else if(bounds.length>0){
-   if(shouldRecenter)map.fitBounds(L.latLngBounds(bounds),{padding:[35,35],maxZoom:compact?16:14});
-  } else if(shouldRecenter)map.setView(center,12);
- },[places,userLocation,picked,selectedId,compact]);
+  if(shouldRecenter){
+   if(userLocation&&valid(userLocation)){
+    if(!compact)map.setView([userLocation.latitude,userLocation.longitude],13);
+    else if(!bounds.length)map.setView([userLocation.latitude,userLocation.longitude],14);
+   }else if(bounds.length)map.fitBounds(L.latLngBounds(bounds),{padding:[35,35],maxZoom:compact?16:14});
+   else map.setView(center,12);
+  }
+  return()=>{map.off('zoomend',render);if(renderRef.current===render)renderRef.current=()=>{}};
+ },[places,userLocation,picked,selectedId,compact,Boolean(onPick)]);
+
  return <div className={'venue-map-wrap'+(compact?' venue-map-wrap-compact':'')}>
  <div className={(compact?'venue-map venue-map-compact':'venue-map')+(interactive?' venue-map-active':' venue-map-passive')} ref={element} role="application" aria-label="Карта заведений BOR"/>
  <button type="button" className={'map-gesture-toggle'+(interactive?' map-gesture-on':'')} aria-pressed={interactive} onClick={()=>setInteractive(v=>!v)}>{interactive?'✓ Готово · Листать страницу':onPick?'✥ Выбрать точку на карте':'✥ Двигать карту'}</button>
