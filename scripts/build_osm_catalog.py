@@ -62,6 +62,6 @@ def main():
    if p['address']=='Адрес не указан в OpenStreetMap' or p['address'].strip().replace('/','').isdigit():
     street=nearby_street(handler.roads,p['latitude'],p['longitude'])
     if street:suggestions[ident]=street
-  HINTS.write_text(json.dumps({'source':'OpenStreetMap/Geofabrik','description':'Ближайшая именованная улица — ориентир, не подтверждённый адрес','suggestions':suggestions},ensure_ascii=False,separators=(',',':'))+'\\n',encoding='utf-8')
+  HINTS.write_text(json.dumps({'source':'OpenStreetMap/Geofabrik','description':'Ближайшая именованная улица — ориентир, не подтверждённый адрес','suggestions':suggestions},ensure_ascii=False,separators=(',',':'))+'\n',encoding='utf-8')
   print('Prepared',len(handler.by_id),'real venues and',len(suggestions),'street hints',flush=True)
 if __name__=='__main__':main()
