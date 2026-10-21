@@ -233,3 +233,8 @@ input,select,textarea{font-size:16px}
 .bor-cluster-picker button{display:block;width:100%;text-align:left;min-height:40px;border:0;border-bottom:1px solid #dce5d9;padding:8px 5px;color:#1c3425;background:#fff;font-weight:650;font-size:13px;white-space:normal;overflow-wrap:anywhere}
 .venue-map .leaflet-popup-content{margin:12px}
 .venue-map .leaflet-popup-content-wrapper{border-radius:13px}
+
+
+.bor-map-zoom{position:absolute;z-index:500;right:10px;top:36px;display:grid;gap:5px}
+.bor-map-zoom button{display:grid;place-items:center;min-height:43px;min-width:43px;padding:0;border:1px solid #778d77;border-radius:11px;background:#18291e;color:#d3f4be;font-size:24px;line-height:1;font-weight:600;box-shadow:0 2px 10px rgba(0,0,0,.3)}
+.bor-map-zoom button:focus-visible{outline:2px solid #b8ef78;outline-offset:2px}
