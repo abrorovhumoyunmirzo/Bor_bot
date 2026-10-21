@@ -24,3 +24,11 @@
 .admin-auth-info{padding:12px;gap:10px}
 @media(max-width:375px){.admin-two{gap:8px}.admin-two label{font-size:11px}.admin-form{padding:12px}.admin-pill{max-width:62px;white-space:normal;text-align:right}}
 @media(max-width:330px){.admin-two{grid-template-columns:1fr}.admin-row{gap:8px}.admin-label{font-size:10px}}
+
+
+.admin-location-box{border:1px solid #3d4d41;background:#19231e;border-radius:13px;padding:13px;margin:3px 0 16px}
+.admin-location-title{display:flex;justify-content:space-between;align-items:center;gap:9px;font-size:13px}
+.admin-location-title span{color:#9ba99f;font-size:11px}
+.admin-location-box p{color:#aab6ad;font-size:11px;line-height:1.5;margin:8px 0 13px}
+.admin-location-box .admin-two label{margin-bottom:2px}
+.admin-map-preview{display:flex;align-items:center;color:#b8ef78;text-decoration:none;min-height:42px;font-size:12px;margin-top:9px}
