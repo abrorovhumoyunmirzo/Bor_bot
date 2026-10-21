@@ -6,6 +6,7 @@ import { VenueMap } from './VenueMap';
 
 type Place = { id: string; name: string; district: string; address: string; category: 'coffee'|'workspace'|'cafe'|'restaurant'; active: boolean; latitude: number | null; longitude: number | null };
 type Form = Omit<Place, 'id'>;
+type OsmVenue={sourceId:string;name:string;district:string;address:string;category:'cafe'|'restaurant';latitude:number;longitude:number};
 type Suggestion={id:string;name:string;district:string;address:string;category:Place['category'];created_at:string};
 function readLocation(value: string): { latitude: number; longitude: number } | null {
  const text=value.trim();
@@ -43,6 +44,11 @@ export default function AdminPanel() {
   const [locationText,setLocationText]=useState('');
   const [locationHelp,setLocationHelp]=useState('');
   const [locationExpanded,setLocationExpanded]=useState(false);
+  const [osmResults,setOsmResults]=useState<OsmVenue[]>([]);
+  const [osmSelected,setOsmSelected]=useState<string[]>([]);
+  const [osmLoading,setOsmLoading]=useState(false);
+  const [osmOpen,setOsmOpen]=useState(false);
+  const [osmInfo,setOsmInfo]=useState('');
   async function refresh() {
     setLoading(true); setError('');
     try { const data = await request('GET'); setPlaces(data.places);setSuggestions(data.suggestions||[]); }
@@ -80,6 +86,36 @@ export default function AdminPanel() {
     }catch(e){setError(e instanceof Error?e.message:'Ошибка проверки');}
     finally{setBusy(false)}
   }
+  async function osmPreview(){
+    if(osmLoading)return;
+    setOsmLoading(true);setError('');setOsmInfo('');
+    try{
+      const initData=telegram()?.initData;
+      if(!initData)throw new Error('Открой панель через Telegram.');
+      const response=await fetch('/api/admin?osmPreview=1',{headers:{'X-Telegram-Init-Data':initData},cache:'no-store'});
+      const data=await response.json().catch(()=>null);
+      if(!response.ok)throw new Error(data?.error||'Не удалось получить список из OpenStreetMap ('+response.status+').');
+      setOsmResults(data.options||[]);setOsmSelected([]);
+      setOsmInfo('Найдено '+data.totalFound+', возможных дубликатов '+data.duplicates+'. Выбери подходящие места для добавления.');
+      setOsmOpen(true);
+    }catch(e){setError(e instanceof Error?e.message:'Ошибка импорта');}
+    finally{setOsmLoading(false)}
+  }
+  async function osmImport(){
+    if(osmLoading||osmSelected.length===0)return;
+    setOsmLoading(true);setError('');
+    try{
+      const initData=telegram()?.initData;
+      if(!initData)throw new Error('Открой панель через Telegram.');
+      const response=await fetch('/api/admin',{method:'POST',headers:{'X-Telegram-Init-Data':initData,'Content-Type':'application/json'},body:JSON.stringify({importAction:'osm',sourceIds:osmSelected})});
+      const data=await response.json().catch(()=>null);
+      if(!response.ok)throw new Error(data?.error||'Не удалось добавить места ('+response.status+').');
+      setOsmInfo('Добавлено: '+data.added+'. Пропущено дубликатов: '+data.skipped+'.');
+      setOsmResults([]);setOsmSelected([]);
+      await refresh();
+    }catch(e){setError(e instanceof Error?e.message:'Ошибка импорта');}
+    finally{setOsmLoading(false)}
+  }
   const telegramAuthorized = Boolean(telegram()?.initData);
   const filtered = places.filter(p => [p.name, p.district, p.address].some(v => v.toLowerCase().includes(query.toLowerCase())));
   return <div className="shell admin-shell">
@@ -96,6 +132,17 @@ export default function AdminPanel() {
         <p>Скопируй ссылку <strong>t.me/bor_city_bot?startapp=admin</strong> и отправь её себе в «Избранное» Telegram. Нажми на ссылку <strong>внутри Telegram</strong> и выбери «Открыть приложение».</p>
         <button type="button" className="secondary" onClick={async()=>{try{await navigator.clipboard.writeText('https://t.me/bor_city_bot?startapp=admin');setNotice('Ссылка скопирована. Открой её внутри Telegram.')}catch{setError('Не удалось скопировать. Скопируй ссылку вручную.')}}}>Скопировать ссылку для Telegram</button>
         <button type="button" className="admin-textbutton" onClick={()=>{if(telegram()?.initData){void refresh()}else{setError('Telegram всё ещё не передал данные. Открой ссылку в самом Telegram.')}}}>Проверить вход повторно</button></div>
+      </section>}
+      {telegramAuthorized&&<section className="admin-osm">
+        <div className="admin-osm-head"><div><h2>Загрузить места из карты</h2><p>Реальные кафе и рестораны Ташкента из OpenStreetMap — без ручного добавления по одному.</p></div></div>
+        <button className="admin-osm-load" type="button" disabled={osmLoading} onClick={()=>void osmPreview()}>{osmLoading?'Загружаем…':osmOpen?'Обновить найденные места':'Найти заведения автоматически'}</button>
+        {osmInfo&&<p className="admin-osm-note" role="status">{osmInfo}</p>}
+        {osmOpen&&<div className="admin-osm-list">
+          {osmResults.length>0?<><div className="admin-osm-select"><strong>{osmSelected.length} выбрано</strong><button type="button" onClick={()=>setOsmSelected(osmSelected.length===Math.min(80,osmResults.length)?[]:osmResults.slice(0,80).map(p=>p.sourceId))}>{osmSelected.length===Math.min(80,osmResults.length)?'Снять выделение':'Выбрать все (до 80)'}</button></div>
+          <div className="admin-osm-items">{osmResults.map(p=><label key={p.sourceId} className="admin-osm-item"><input type="checkbox" checked={osmSelected.includes(p.sourceId)} onChange={e=>setOsmSelected(list=>e.target.checked?[...list,p.sourceId]:list.filter(id=>id!==p.sourceId))} disabled={!osmSelected.includes(p.sourceId)&&osmSelected.length>=80}/><span><strong>{p.name}</strong><small>{p.category==='cafe'?'Кафе':'Ресторан'} · {p.district} · {p.address}</small></span></label>)}</div>
+          <button type="button" className="primary" disabled={osmLoading||!osmSelected.length} onClick={()=>void osmImport()}>Добавить {osmSelected.length} в BOR</button></>:<p className="admin-osm-note">Новых заведений в выбранной области пока нет.</p>}
+        </div>}
+        <p className="admin-osm-license">Источник: © OpenStreetMap contributors (ODbL). Статусы загруженности и Wi-Fi не импортируются. Проверь адреса после загрузки: некоторые отсутствуют в исходных данных.</p>
       </section>}
       {telegramAuthorized&&<section className="admin-suggestions"><div className="admin-suggestions-heading"><h2>Предложения пользователей</h2><span>{suggestions.length} ожидают</span></div>{suggestions.length===0?<p className="admin-muted">Пока нет предложений на проверку.</p>:suggestions.map(item=><div className="admin-suggestion" key={item.id}><strong>{item.name}</strong><span>{item.district} · {item.category==='restaurant'?'Ресторан':item.category==='cafe'?'Кафе':item.category==='coffee'?'Кофейня':'Рабочее пространство'}</span><p>{item.address}</p><div className="admin-suggestion-actions"><button type="button" disabled={busy} onClick={()=>void moderate(item,'reject')}>Отклонить</button><button type="button" disabled={busy} onClick={()=>void moderate(item,'approve')}>Добавить в каталог</button></div></div>)}</section>}
       <form className="admin-form" onSubmit={save}>
