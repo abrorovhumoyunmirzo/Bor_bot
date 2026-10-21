@@ -73,7 +73,7 @@ type OsmVenue={sourceId:string;name:string;district:string;address:string;catego
 async function fetchOsmVenues():Promise<OsmVenue[]>{
  // A bounded downtown Tashkent excerpt avoids heavy requests to the shared Overpass service.
  const query='[out:json][timeout:18];(nwr["amenity"~"^(restaurant|cafe)$"]["name"](41.245,69.18,41.37,69.365););out center 350;';
- const endpoints=['https://overpass.kumi.systems/api/interpreter','https://overpass.nchc.org.tw/api/interpreter'];
+ const endpoints=['https://overpass.private.coffee/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
  let lastError='OSM недоступен';
  for(const endpoint of endpoints){
   try{
@@ -116,6 +116,7 @@ function dedupeOsm(candidates:OsmVenue[],existing:Array<{name:string;latitude:nu
  return accepted;
 }
 
+export const config={maxDuration:60};
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Allow', 'GET, POST, PATCH');
   if (!['GET', 'POST', 'PATCH'].includes(req.method || '')) return answer(res, 405, { error: 'Метод не поддерживается' });
