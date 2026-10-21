@@ -91,3 +91,9 @@ input,select,textarea{font-size:16px}
 .filter-feedback{display:flex;justify-content:space-between;align-items:center;gap:12px;color:#9cafa1;font-size:11px;margin:-2px 0 13px}
 .filter-feedback button{min-height:36px;background:none;color:#b8ef78;padding:0 3px;border:0;font-weight:700;font-size:11px}
 @media(max-width:360px){.quick-filter-bar button{font-size:11px;padding:0 11px}}
+
+
+.direction-link{display:flex;align-items:center;justify-content:center;gap:9px;min-height:48px;border:1px solid #54704c;border-radius:12px;color:#b8ef78;background:#233328;text-decoration:none;font-size:13px;font-weight:750;margin:5px 0 12px}
+.direction-link svg:last-child{margin-left:auto;margin-right:17px}
+.direction-link svg:first-child{margin-left:17px}
+.direction-link:focus-visible{outline:2px solid #b8ef78;outline-offset:3px}
