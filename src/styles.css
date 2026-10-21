@@ -248,3 +248,15 @@ input,select,textarea{font-size:16px}
 @media(max-height:700px){
  .map-quick-sheet{max-height:calc(100dvh - 110px - env(safe-area-inset-bottom,0px))}
 }
+
+
+/* Nearby search: visible only after the user grants geolocation. */
+.nearby-radius{padding:11px 12px 10px;margin:0 0 12px;background:#202d24;border:1px solid #49664a;border-radius:14px}
+.nearby-radius-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:9px}
+.nearby-radius-header>span{font-size:10px;letter-spacing:1.2px;font-weight:800;color:#acc7a9}
+.nearby-radius-header>button{border:0;background:transparent;color:#b8ef78;font-size:11px;font-weight:750;min-height:36px;padding:0 2px}
+.nearby-radius-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.nearby-radius-options button{min-height:44px;border:1px solid #4d6650;border-radius:10px;background:#2a392d;color:#e1ebdf;font-size:13px;font-weight:750}
+.nearby-radius-options button.active{background:#b8ef78;border-color:#b8ef78;color:#1b2a1c}
+.nearby-radius-options button:focus-visible,.nearby-radius-header button:focus-visible{outline:2px solid #b8ef78;outline-offset:2px}
+.nearby-radius-note{font-size:10px;color:#a9bba9;line-height:1.5;margin:10px 0 0}
