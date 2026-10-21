@@ -98,3 +98,22 @@
 .admin-name-options strong{font-size:12px;color:#d7e9d1}
 .admin-name-options p{font-size:11px;color:#aebfac;line-height:1.5;margin:6px 0 9px}
 .admin-name-options button{border:1px solid #66845c;color:#d7f2cb;border-radius:9px;background:#2d4331;padding:8px 10px;margin:0 5px 6px 0;min-height:38px;font-size:11px}
+
+/* BOR mobile visitor analytics */
+.admin-analytics{border:1px solid #526b55;background:#1e2b23;border-radius:16px;padding:15px 13px;margin:0 0 21px}
+.admin-analytics-head{display:flex;justify-content:space-between;align-items:center;gap:9px}
+.admin-analytics-head h2{font-size:18px;margin:4px 0}
+.admin-analytics-refresh{display:flex;align-items:center;justify-content:center;gap:5px;min-height:40px;border-radius:9px;border:1px solid #587357;background:#273a2c;color:#c9e9b7;padding:8px;font-size:11px}
+.admin-analytics-note{font-size:11px;line-height:1.5;color:#a8b9a9;margin:8px 0 13px}
+.admin-analytics-error{font-size:11px;color:#e8b4a7;line-height:1.5}
+.admin-analytics-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.admin-analytics-metric{border:1px solid #415845;background:#26372b;border-radius:12px;padding:12px;min-width:0;display:flex;flex-direction:column;gap:6px}
+.admin-analytics-metric strong{font-size:23px;line-height:1;font-variant-numeric:tabular-nums;color:#dbf5c7}
+.admin-analytics-metric span{font-size:11px;color:#afc3b0;line-height:1.35}
+.admin-analytics-trend{margin:16px 0 2px}
+.admin-analytics-trend h3{font-size:12px;color:#c6ddc3;margin:0 0 10px}
+.admin-analytics-bars{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.admin-analytics-day{display:flex;align-items:center;flex-direction:column;gap:4px;font-size:10px;color:#d7e9d1}
+.admin-analytics-track{height:62px;width:100%;max-width:22px;border-radius:5px;background:#324635;display:flex;align-items:flex-end;overflow:hidden}
+.admin-analytics-track>div{width:100%;background:#b8ef78;border-radius:4px 4px 0 0}
+.admin-analytics-day small{font-size:9px;color:#aebfae}
