@@ -1,0 +1,1 @@
+type Telegram={ready():void;expand():void;initData:string;HapticFeedback?:{impactOccurred(type:string):void}};declare global{interface Window{Telegram?:{WebApp?:Telegram}}}export function telegram(){return window.Telegram?.WebApp}export function initTelegram(){const t=telegram();t?.ready();t?.expand()}
