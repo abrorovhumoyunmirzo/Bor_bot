@@ -77,3 +77,16 @@
 .admin-osm-pages{display:flex;align-items:center;justify-content:space-between;gap:7px;padding:10px 0;font-size:11px;color:#b2c3b2}
 .admin-osm-pages button{min-height:44px;padding:6px 10px;border-radius:9px;background:#263c2d;border:1px solid #4f7351;color:#c9e7bd;font-size:11px}
 .admin-osm-pages button:disabled{opacity:.4}
+
+
+/* Safe remove/restore action for venue editor. */
+.admin-archive{margin:12px 0 0}
+.admin-archive-toggle,.admin-restore-toggle{border:1px solid #955f58;color:#eebdb5;background:transparent;border-radius:12px;width:100%;min-height:46px;font-weight:700;font-size:12px}
+.admin-restore-toggle{border-color:#628454;color:#c5e8b0}
+.admin-archive-warning{border:1px solid #955f58;background:#392926;padding:13px;border-radius:12px}
+.admin-archive-warning strong{font-size:13px;color:#f2c6c1}
+.admin-archive-warning p{font-size:11px;color:#dfbdb9;line-height:1.5;margin:7px 0 12px}
+.admin-archive-warning>div{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.admin-archive-warning button{min-height:44px;border-radius:10px;border:1px solid #916e6a;background:transparent;color:#f4cfcb;font-weight:700;font-size:12px}
+.admin-archive-warning button:last-child{background:#b96d61;color:#1e1210;border-color:#b96d61}
+.admin-archive-warning button:disabled,.admin-archive-toggle:disabled,.admin-restore-toggle:disabled{opacity:.5}
