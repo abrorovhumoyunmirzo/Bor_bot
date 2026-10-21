@@ -8,7 +8,7 @@ HINTS=ROOT/'public'/'osm-location-hints.json'
 URL='https://download.geofabrik.de/asia/uzbekistan-latest.osm.pbf'
 class Venues(osmium.SimpleHandler):
  def __init__(self):
-  super().__init__();self.by_id={};self.roads=collections.defaultdict(list)
+  super().__init__();self.by_id={};self.roads=collections.defaultdict(list);self.name_options={}
  def capture(self,kind,ident,tags,latitude,longitude):
   if not(41.18<=latitude<=41.45 and 69.08<=longitude<=69.49):return
   category=tags.get('amenity')
@@ -19,6 +19,8 @@ class Venues(osmium.SimpleHandler):
   district=(tags.get('addr:suburb') or tags.get('addr:district') or 'Ташкент').strip() or 'Ташкент'
   key=kind+'/'+str(ident)
   self.by_id[key]={'sourceId':key,'name':name,'district':district[:80],'address':address[:240],'category':category,'latitude':round(latitude,7),'longitude':round(longitude,7)}
+  variants=list(dict.fromkeys((tags.get(field) or '').strip() for field in ('brand','official_name','name','name:uz','name:en') if 2<=len((tags.get(field) or '').strip())<=120))
+  self.name_options[key]=[v for v in variants if v.casefold()!=name.casefold()][:4]
  def node(self,n):
   if n.location.valid():self.capture('node',n.id,n.tags,n.location.lat,n.location.lon)
  def way(self,w):
@@ -62,6 +64,6 @@ def main():
    if p['address']=='Адрес не указан в OpenStreetMap' or p['address'].strip().replace('/','').isdigit():
     street=nearby_street(handler.roads,p['latitude'],p['longitude'])
     if street:suggestions[ident]=street
-  HINTS.write_text(json.dumps({'source':'OpenStreetMap/Geofabrik','description':'Ближайшая именованная улица — ориентир, не подтверждённый адрес','suggestions':suggestions},ensure_ascii=False,separators=(',',':'))+'\n',encoding='utf-8')
+  HINTS.write_text(json.dumps({'source':'OpenStreetMap/Geofabrik','description':'Ближайшая именованная улица — ориентир, не подтверждённый адрес','suggestions':suggestions,'nameOptions':{k:v for k,v in handler.name_options.items() if v}},ensure_ascii=False,separators=(',',':'))+'\n',encoding='utf-8')
   print('Prepared',len(handler.by_id),'real venues and',len(suggestions),'street hints',flush=True)
 if __name__=='__main__':main()
