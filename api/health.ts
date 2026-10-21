@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { configured, db, guard, json } from './_shared';
+import crypto from 'node:crypto';export const configured=()=>Boolean(process.env.SUPABASE_URL&&(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)&&process.env.TELEGRAM_BOT_TOKEN);export function json(r:VercelResponse,status:number,data:unknown){r.setHeader('Cache-Control','no-store');return r.status(status).json(data)}export async function db(path:string,options:RequestInit={}){const url=process.env.SUPABASE_URL,key=(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY);if(!url||!key)throw Error('Database not configured');const r=await fetch(url.replace(/\/$/,'')+'/rest/v1/'+path,{...options,headers:{apikey:key,...(!key.startsWith('sb_secret_')?{Authorization:'Bearer '+key}:{}),'Content-Type':'application/json',...options.headers}});if(!r.ok)throw Error('Database error '+r.status);return r.status===204?null:r.json()}export function guard(req:VercelRequest,res:VercelResponse,method:string){if(req.method!==method){res.setHeader('Allow',method);json(res,405,{error:'Метод не поддерживается'});return false}return true}
+
 
 // Public diagnostics expose no credentials and never modify data.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
