@@ -28,16 +28,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       for (const report of current) { crowdVotes[report.crowd]++; wifiVotes[report.wifi]++; }
       const orderedCrowds = (Object.keys(crowdVotes) as Crowd[]).sort((a,b) => crowdVotes[b] - crowdVotes[a]);
       const wifiOptions = (['good','slow','bad'] as Wifi[]).sort((a,b) => wifiVotes[b] - wifiVotes[a]);
-      const crowdConflict = current.length > 1 && crowdVotes[orderedCrowds[0]] === crowdVotes[orderedCrowds[1]];
-      const wifiConflict = wifiVotes[wifiOptions[0]] > 0 && wifiVotes[wifiOptions[0]] === wifiVotes[wifiOptions[1]];
+      // Trust is about independent people, not repeated reports from the same user.
+      // Confirm only unanimous crowd reports from at least two different users.
+      const crowdConflict = current.length >= 2 && crowdVotes[orderedCrowds[0]] !== current.length;
+      const verified = current.length >= 2 && !crowdConflict;
+      const knownWifi = wifiVotes.good + wifiVotes.slow + wifiVotes.bad;
+      const wifiConflict = knownWifi > 1 && wifiVotes[wifiOptions[0]] !== knownWifi;
+      const wifiVerified = knownWifi >= 2 && !wifiConflict;
       return {
         ...place,
         crowd: current.length && !crowdConflict ? orderedCrowds[0] : null,
-        wifi: wifiVotes[wifiOptions[0]] > 0 && !wifiConflict ? wifiOptions[0] : null,
+        wifi: knownWifi > 0 && !wifiConflict ? wifiOptions[0] : null,
         latestAt: current[0]?.created_at || null,
         reportCount: current.length,
-        verified: false,
-        conflict: crowdConflict || wifiConflict,
+        verified,
+        crowdAgreement: current.length && !crowdConflict ? current.length : crowdVotes[orderedCrowds[0]],
+        wifiVerified,
+        conflict: crowdConflict,
+        wifiConflict,
       };
     });
     return json(res, 200, { mode: 'live', places: result });
