@@ -114,8 +114,6 @@ export default function AdminPanel() {
     finally{setBusy(false)}
   }
   const telegramAuthorized = Boolean(telegram()?.initData);
-  const osmMatches=osmResults.filter(p=>[p.name,p.district,p.address].some(v=>v.toLowerCase().includes(osmQuery.trim().toLowerCase())));
-  const osmVisible=osmMatches.slice(osmOffset,osmOffset+50);
   const missingAddress=(p:Place)=>!p.address||p.address==='Адрес не указан в OpenStreetMap'||/^\d+[a-zа-я]?\/?\d*$/i.test(p.address.trim());
   const missingCount=places.filter(missingAddress).length;
   const filtered = places.filter(p => (!qualityFilter||missingAddress(p)||Boolean(p.source_id&&nameOptions[p.source_id]?.length))&&[p.name, p.district, p.address].some(v => v.toLowerCase().includes(query.toLowerCase())));
