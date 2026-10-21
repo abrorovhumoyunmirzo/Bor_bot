@@ -190,6 +190,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch { return answer(res, 403, { error: 'Недопустимый источник.' }); }
   }
   try {
+    if(req.method==='GET'&&req.query.analytics==='1'){
+      const summary=await database('rpc/bor_analytics_summary',{method:'POST',body:'{}'});
+      return answer(res,200,{analytics:summary});
+    }
     if(req.method==='GET'&&req.query.osmPreview==='1'){
       const [osm,existing]=await Promise.all([fetchOsmVenues(),database('places?select=name,latitude,longitude,source_id,source_type&limit=2500')]);
       const options=dedupeOsm(osm,existing||[]);
