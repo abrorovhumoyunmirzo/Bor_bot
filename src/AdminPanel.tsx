@@ -94,10 +94,12 @@ export default function AdminPanel() {
     try{
       if(!telegram()?.initData)throw new Error('Открой панель через Telegram.');
       // Local, prebuilt catalogue: opening the app never waits for Overpass anymore.
-      const response=await fetch('/osm-tashkent.json',{cache:'no-cache'});
-      if(!response.ok)throw new Error('Каталог пока обновляется. Попробуй позже: источники OpenStreetMap сейчас недоступны.');
+      const response=await fetch('/osm-tashkent.json',{cache:'no-store',headers:{Accept:'application/json'}});
+      if(!response.ok)throw new Error('Каталог не опубликован на сервере (HTTP '+response.status+'). Обнови страницу после новой публикации BOR.');
+      const contentType=response.headers.get('content-type')||'';
+      if(!contentType.includes('json'))throw new Error('Сервер вернул страницу вместо каталога. Нужна последняя публикация BOR с исправленным маршрутом JSON.');
       const data=await response.json().catch(()=>null);
-      if(!Array.isArray(data?.options))throw new Error('Данные каталога ещё не готовы. Повтори попытку позже.');
+      if(!Array.isArray(data?.options))throw new Error('Файл каталога повреждён или устарел. Нужна повторная публикация каталога.');
       const existing=new Set(places.filter(p=>p.latitude!==null&&p.longitude!==null).map(p=>p.name.trim().toLowerCase()+'|'+p.latitude!.toFixed(3)+'|'+p.longitude!.toFixed(3)));
       const all=data.options as OsmVenue[];
       const options=all.filter(p=>!existing.has(p.name.trim().toLowerCase()+'|'+p.latitude.toFixed(3)+'|'+p.longitude.toFixed(3)));
