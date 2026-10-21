@@ -94,7 +94,10 @@ export default function AdminPanel() {
       if(!initData)throw new Error('Открой панель через Telegram.');
       const response=await fetch('/api/admin?osmPreview=1',{headers:{'X-Telegram-Init-Data':initData},cache:'no-store'});
       const data=await response.json().catch(()=>null);
-      if(!response.ok)throw new Error(data?.error||'Не удалось получить список из OpenStreetMap ('+response.status+').');
+      if(!response.ok){
+        if(!data?.error&&response.status===504)throw new Error('Картографический сервер отвечает слишком долго. Попробуй ещё раз через минуту.');
+        throw new Error(data?.error||'Сервис карт временно недоступен (HTTP '+response.status+').');
+      }
       setOsmResults(data.options||[]);setOsmSelected([]);
       setOsmInfo('Найдено '+data.totalFound+', возможных дубликатов '+data.duplicates+'. Выбери подходящие места для добавления.');
       setOsmOpen(true);
@@ -107,7 +110,7 @@ export default function AdminPanel() {
     try{
       const initData=telegram()?.initData;
       if(!initData)throw new Error('Открой панель через Telegram.');
-      const response=await fetch('/api/admin',{method:'POST',headers:{'X-Telegram-Init-Data':initData,'Content-Type':'application/json'},body:JSON.stringify({importAction:'osm',sourceIds:osmSelected})});
+      const response=await fetch('/api/admin',{method:'POST',headers:{'X-Telegram-Init-Data':initData,'Content-Type':'application/json'},body:JSON.stringify({importAction:'osm',venues:osmResults.filter(p=>osmSelected.includes(p.sourceId))})});
       const data=await response.json().catch(()=>null);
       if(!response.ok)throw new Error(data?.error||'Не удалось добавить места ('+response.status+').');
       setOsmInfo('Добавлено: '+data.added+'. Пропущено дубликатов: '+data.skipped+'.');
