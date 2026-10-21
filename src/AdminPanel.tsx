@@ -4,8 +4,8 @@ import { initTelegram, telegram } from './lib/telegram';
 import './admin.css';
 import { VenueMap } from './VenueMap';
 
-type Place = { id: string; name: string; district: string; address: string; category: 'coffee'|'workspace'|'cafe'|'restaurant'; active: boolean; latitude: number | null; longitude: number | null };
-type Form = Omit<Place, 'id'>;
+type Place = { id: string; name: string; district: string; address: string; category: 'coffee'|'workspace'|'cafe'|'restaurant'; active: boolean; latitude: number | null; longitude: number | null; source_id?:string|null };
+type Form = Omit<Place, 'id' | 'source_id'>;
 type OsmVenue={sourceId:string;name:string;district:string;address:string;category:'cafe'|'restaurant';latitude:number;longitude:number};
 type Suggestion={id:string;name:string;district:string;address:string;category:Place['category'];created_at:string};
 function readLocation(value: string): { latitude: number; longitude: number } | null {
@@ -51,6 +51,9 @@ export default function AdminPanel() {
   const [osmInfo,setOsmInfo]=useState('');
   const [osmQuery,setOsmQuery]=useState('');
   const [osmOffset,setOsmOffset]=useState(0);
+  const [streetHints,setStreetHints]=useState<Record<string,{street:string;distanceMeters:number}>>({});
+  const [nameOptions,setNameOptions]=useState<Record<string,string[]>>({});
+  const [qualityFilter,setQualityFilter]=useState(false);
   const [archiveConfirm,setArchiveConfirm]=useState(false);
   async function refresh() {
     setLoading(true); setError('');
@@ -59,6 +62,7 @@ export default function AdminPanel() {
     finally { setLoading(false); }
   }
   useEffect(() => { initTelegram(); if (telegram()?.initData) { void refresh(); } else { setLoading(false); } }, []);
+  useEffect(()=>{const controller=new AbortController();fetch('/osm-location-hints.json',{signal:controller.signal}).then(r=>r.ok?r.json():null).then(d=>{if(d?.suggestions)setStreetHints(d.suggestions);if(d?.nameOptions)setNameOptions(d.nameOptions)}).catch(()=>{});return()=>controller.abort()},[]);
   function edit(place: Place) {
     setSelected(place.id);setArchiveConfirm(false);
     setLocationText('');setLocationHelp('');
@@ -140,7 +144,10 @@ export default function AdminPanel() {
   const telegramAuthorized = Boolean(telegram()?.initData);
   const osmMatches=osmResults.filter(p=>[p.name,p.district,p.address].some(v=>v.toLowerCase().includes(osmQuery.trim().toLowerCase())));
   const osmVisible=osmMatches.slice(osmOffset,osmOffset+50);
-  const filtered = places.filter(p => [p.name, p.district, p.address].some(v => v.toLowerCase().includes(query.toLowerCase())));
+  const missingAddress=(p:Place)=>!p.address||p.address==='Адрес не указан в OpenStreetMap'||/^\\d+[a-zа-я]?\\/?\\d*$/i.test(p.address.trim());
+  const missingCount=places.filter(missingAddress).length;
+  const filtered = places.filter(p => (!qualityFilter||missingAddress(p)||Boolean(p.source_id&&nameOptions[p.source_id]?.length))&&[p.name, p.district, p.address].some(v => v.toLowerCase().includes(query.toLowerCase())));
+  const alternatives=selected?nameOptions[places.find(p=>p.id===selected)?.source_id||'']||[]:[];
   return <div className="shell admin-shell">
     <header className="header"><a href="/" className="admin-brand">bor<span>.</span></a><span className="admin-label">Управление местами</span></header>
     <main className="content">
@@ -176,6 +183,7 @@ export default function AdminPanel() {
       <form className="admin-form" onSubmit={save}>
         <div className="admin-form-title"><h2>{selected ? 'Редактировать место' : 'Новое заведение'}</h2>{selected && <button type="button" className="admin-textbutton" onClick={create}><Plus size={16}/> Новое</button>}</div>
         <label>Название<input required minLength={2} maxLength={120} value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} placeholder="Например, название кофейни"/></label>
+        {selected&&alternatives.length>0&&<div className="admin-name-options"><strong>Другие названия из OpenStreetMap</strong><p>Это варианты из картографических тегов, не подтверждённые официальные переименования. Выбери подходящий, затем сохрани.</p>{alternatives.map(n=><button type="button" key={n} onClick={()=>setForm(f=>({...f,name:n}))}>{n}</button>)}</div>}
         <label>Район<input required minLength={2} maxLength={80} value={form.district} onChange={e => setForm(f => ({...f, district: e.target.value}))} placeholder="Например, Юнусабад"/></label>
         <label>Адрес<input required minLength={5} maxLength={240} value={form.address} onChange={e => setForm(f => ({...f, address: e.target.value}))} placeholder="Улица, дом, ориентир"/></label>
         <div className="admin-two">
@@ -202,8 +210,9 @@ export default function AdminPanel() {
         </div>}
       </form>
       <div className="admin-list-heading"><h2>Все заведения <span>{places.length}</span></h2><button type="button" className="icon-btn refresh" aria-label="Обновить список" onClick={() => void refresh()}><ArrowClockwise size={20}/></button></div>
+      <div className="admin-quality-summary"><span>Без точного адреса: <strong>{missingCount}</strong> из {places.length}</span><button type="button" aria-pressed={qualityFilter} className={qualityFilter?'active':''} onClick={()=>setQualityFilter(v=>!v)}>{qualityFilter?'Все заведения':'Показать для проверки'}</button></div>
       <input className="admin-search" placeholder="Поиск по названию, району, адресу" value={query} onChange={e=>setQuery(e.target.value)} aria-label="Поиск заведений"/>
-      {loading ? <div className="admin-muted">Загружаем данные…</div> : filtered.length ? <div className="admin-rows">{filtered.map(p => <button key={p.id} type="button" className={'admin-row ' + (selected===p.id?'admin-row-selected':'')} onClick={()=>edit(p)}><span className="admin-row-icon"><Buildings size={21}/></span><span className="admin-row-info"><strong>{p.name}</strong><small>{p.district} · {p.address}</small></span><span className={p.active?'admin-pill':'admin-pill admin-pill-off'}>{p.active?'Активно':'Скрыто'}</span></button>)}</div> : <div className="empty"><Buildings size={28}/><h3>{places.length ? 'Ничего не найдено' : 'Пока нет заведений'}</h3><p>{places.length ? 'Попробуй другой запрос.' : 'Добавь первое проверенное место через форму выше.'}</p></div>}
+      {loading ? <div className="admin-muted">Загружаем данные…</div> : filtered.length ? <div className="admin-rows">{filtered.map(p => <button key={p.id} type="button" className={'admin-row ' + (selected===p.id?'admin-row-selected':'')} onClick={()=>edit(p)}><span className="admin-row-icon"><Buildings size={21}/></span><span className="admin-row-info"><strong>{p.name}</strong><small>{p.district} · {missingAddress(p)?p.source_id&&streetHints[p.source_id]?'Ориентир: '+streetHints[p.source_id].street+' (адрес не подтверждён)':'Адрес уточняется':p.address}</small></span><span className={p.active?'admin-pill':'admin-pill admin-pill-off'}>{p.active?'Активно':'Скрыто'}</span></button>)}</div> : <div className="empty"><Buildings size={28}/><h3>{places.length ? 'Ничего не найдено' : 'Пока нет заведений'}</h3><p>{places.length ? 'Попробуй другой запрос.' : 'Добавь первое проверенное место через форму выше.'}</p></div>}
       <p className="footnote">Админ-доступ определяется на сервере по подписанным данным Telegram. Скрытые места не отображаются в публичном каталоге.</p>
     </main>
   </div>;
