@@ -203,3 +203,12 @@ input,select,textarea{font-size:16px}
 .suggest-form small{display:block;font-size:10px;color:#8f9f92;line-height:1.5;margin-top:10px}
 .suggest-success{display:flex;flex:1;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:25px;gap:12px}
 .suggest-success>svg{color:#b8ef78}.suggest-success h1{font-size:29px;margin:0}.suggest-success p{color:#b2c4b5;font-size:13px;line-height:1.6}.suggest-success .primary{max-width:320px}
+
+
+/* A full-screen action must completely unmount background interaction layers visually. */
+.suggest-active>.header,.suggest-active>.content,.suggest-active>.bottom{display:none!important}
+.suggest-active{padding-bottom:0!important;min-height:100dvh}
+.suggest-active .suggest-screen{z-index:2000;isolation:isolate}
+.suggest-screen{overscroll-behavior:contain}
+.suggest-form{scrollbar-width:none}
+.suggest-form::-webkit-scrollbar{display:none}
