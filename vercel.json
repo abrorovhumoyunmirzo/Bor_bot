@@ -5,7 +5,7 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/((?!api/|assets/|osm-tashkent\\.json$|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$).*)",
+      "source": "/((?!api/|assets/|osm-(?:tashkent|location-hints)\\.json$|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$).*)",
       "destination": "/index.html"
     }
   ]
