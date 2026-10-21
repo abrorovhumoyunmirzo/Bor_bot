@@ -15,7 +15,6 @@ function authenticatedId(raw: string, token: string): AuthResult {
     const hash = data.get('hash');
     if (!hash || !/^[a-f0-9]{64}$/i.test(hash)) return { id: null, reason: 'invalid_hash' };
     data.delete('hash');
-    data.delete('signature');
     const now = Math.floor(Date.now() / 1000);
     const authDate = Number(data.get('auth_date'));
     if (!Number.isSafeInteger(authDate) || authDate > now + 60 || now - authDate > 3600)
