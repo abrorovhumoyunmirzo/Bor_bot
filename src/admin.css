@@ -41,3 +41,14 @@
 .admin-location-coords{display:flex;align-items:center;justify-content:space-between;gap:9px;margin-top:10px;min-width:0;background:#26352b;border-radius:10px;padding:9px 10px;font-size:12px}
 .admin-location-coords span{overflow-wrap:anywhere}
 .admin-location-coords button{background:transparent;border:0;color:#b8ef78;font-size:12px;min-height:40px}
+
+
+.admin-suggestions{margin:0 0 22px}
+.admin-suggestions-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}
+.admin-suggestions-heading h2{font-size:18px}.admin-suggestions-heading>span{font-size:11px;color:#b8ef78}
+.admin-suggestion{background:#202e25;border:1px solid #4a604a;border-radius:13px;padding:14px;margin-bottom:9px;display:grid;gap:6px}
+.admin-suggestion strong{font-size:14px}.admin-suggestion>span,.admin-suggestion p{font-size:11px;color:#b4c3b6;line-height:1.5;margin:0}
+.admin-suggestion-actions{display:grid;grid-template-columns:1fr 1.3fr;gap:8px;margin-top:6px}
+.admin-suggestion-actions button{min-height:44px;border-radius:10px;border:1px solid #526354;color:#d4e3d5;background:transparent;font-size:11px;font-weight:700}
+.admin-suggestion-actions button:last-child{background:#b8ef78;color:#1c301d;border-color:#b8ef78}
+.admin-suggestion-actions button:disabled{opacity:.4}
