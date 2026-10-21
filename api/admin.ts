@@ -82,35 +82,43 @@ async function fetchOsmVenues():Promise<OsmVenue[]>{
   'https://overpass.private.coffee/api/interpreter',
   'https://overpass-api.de/api/interpreter'
  ];
- const failures:string[]=[];
- for(const endpoint of endpoints){
-  try{
+ // Contact mirrors in parallel: never spend 3 x 8.5 seconds inside a short-lived function.
+ // Abort the other requests as soon as one has returned usable data.
+ const controller=new AbortController();
+ const timeout=setTimeout(()=>controller.abort(),6800);
+ const lookup=async(endpoint:string):Promise<OsmVenue[]>=>{
    const response=await fetch(endpoint,{
-    method:'POST',
-    headers:{'Content-Type':'application/x-www-form-urlencoded'},
-    body:new URLSearchParams({data:query}).toString(),
-    signal:AbortSignal.timeout(8500)
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({data:query}).toString(),
+      signal:controller.signal
    });
-   if(!response.ok){failures.push(String(response.status));continue}
+   if(!response.ok)throw Error('OSM_HTTP_'+response.status);
    const data=await response.json() as {elements?:Array<{type:string;id:number;lat?:number;lon?:number;center?:{lat:number;lon:number};tags?:Record<string,string>}>};
-   if(!Array.isArray(data.elements))throw new Error('Invalid OSM response');
+   if(!Array.isArray(data.elements))throw Error('OSM_INVALID_RESPONSE');
    const result:OsmVenue[]=[];
    for(const el of data.elements){
-    const tags=el.tags||{},latitude=el.lat??el.center?.lat,longitude=el.lon??el.center?.lon;
-    const name=(tags['name:ru']||tags.name||'').trim();
-    if(name.length<2||name.length>120||!Number.isFinite(latitude)||!Number.isFinite(longitude)||typeof latitude!=='number'||typeof longitude!=='number')continue;
-    if(tags.amenity!=='cafe'&&tags.amenity!=='restaurant')continue;
-    const street=(tags['addr:street']||'').trim(),house=(tags['addr:housenumber']||'').trim();
-    const fullAddress=[street,house].filter(Boolean).join(', ');
-    const address=(fullAddress||'Адрес не указан в OpenStreetMap').slice(0,240);
-    const district=(tags['addr:suburb']||tags['addr:district']||'Ташкент').trim().slice(0,80);
-    result.push({sourceId:el.type+'/'+el.id,name,district:district.length>=2?district:'Ташкент',address,category:tags.amenity,latitude,longitude});
+      const tags=el.tags||{},latitude=el.lat??el.center?.lat,longitude=el.lon??el.center?.lon;
+      const name=(tags['name:ru']||tags.name||'').trim();
+      if(name.length<2||name.length>120||typeof latitude!=='number'||typeof longitude!=='number'||!Number.isFinite(latitude)||!Number.isFinite(longitude))continue;
+      if(tags.amenity!=='cafe'&&tags.amenity!=='restaurant')continue;
+      const street=(tags['addr:street']||'').trim(),house=(tags['addr:housenumber']||'').trim();
+      const fullAddress=[street,house].filter(Boolean).join(', ');
+      const address=(fullAddress||'Адрес не указан в OpenStreetMap').slice(0,240);
+      const district=(tags['addr:suburb']||tags['addr:district']||'Ташкент').trim().slice(0,80);
+      result.push({sourceId:el.type+'/'+el.id,name,district:district.length>=2?district:'Ташкент',address,category:tags.amenity,latitude,longitude});
    }
    return result.slice(0,100);
-  }catch(e){failures.push(e instanceof Error?e.name:'NetworkError')}
+ };
+ try{
+   const venues=await Promise.any(endpoints.map(lookup));
+   return venues;
+ }catch{
+   throw new Error('OSM_PROVIDER_UNAVAILABLE');
+ }finally{
+   clearTimeout(timeout);
+   controller.abort();
  }
- console.error('OSM preview provider failures:',failures.join(',').slice(0,90));
- throw new Error('OSM_PROVIDER_UNAVAILABLE');
 }
 function validatedOsmInput(raw:unknown):OsmVenue[]|null{
  if(!Array.isArray(raw)||raw.length<1||raw.length>80)return null;
