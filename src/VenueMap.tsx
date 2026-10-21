@@ -95,10 +95,11 @@ export function VenueMap({ places=[],userLocation=null,selectedId=null,onSelect,
   return()=>{map.off('zoomend',render);if(renderRef.current===render)renderRef.current=()=>{}};
  },[places,userLocation,picked,selectedId,compact,Boolean(onPick)]);
 
- return <div className={'venue-map-wrap'+(compact?' venue-map-wrap-compact':'')}>
+ const previewOpen=!compact&&Boolean(selectedId);
+ return <div className={'venue-map-wrap'+(compact?' venue-map-wrap-compact':'')+(previewOpen?' venue-map-preview-open':'')}>
  <div className={(compact?'venue-map venue-map-compact':'venue-map')+(interactive?' venue-map-active':' venue-map-passive')} ref={element} role="application" aria-label="Карта заведений BOR"/>
- {!compact&&<div className="bor-map-zoom" aria-label="Масштаб карты"><button type="button" aria-label="Приблизить карту" onClick={()=>mapRef.current?.zoomIn()}>+</button><button type="button" aria-label="Отдалить карту" onClick={()=>mapRef.current?.zoomOut()}>−</button></div>}
+ {!previewOpen&&<>{!compact&&<div className="bor-map-zoom" aria-label="Масштаб карты"><button type="button" aria-label="Приблизить карту" onClick={()=>mapRef.current?.zoomIn()}>+</button><button type="button" aria-label="Отдалить карту" onClick={()=>mapRef.current?.zoomOut()}>−</button></div>}
  <button type="button" className={'map-gesture-toggle'+(interactive?' map-gesture-on':'')} aria-pressed={interactive} onClick={()=>setInteractive(v=>!v)}>{interactive?'✓ Готово · Листать страницу':onPick?'✥ Выбрать точку на карте':'✥ Двигать карту'}</button>
- {!interactive&&<div className="map-scroll-help" aria-hidden="true">Листай страницу как обычно</div>}
+ {!interactive&&<div className="map-scroll-help" aria-hidden="true">Листай страницу как обычно</div>}</>}
  </div>;
 }
