@@ -11,8 +11,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       message: 'Server configuration is incomplete. Check Supabase URL, secret key and Telegram bot token in Vercel.',
     });
   }
+  let stage = 'places';
   try {
     const places = await db('places?select=id&active=eq.true&limit=1') as unknown[];
+    stage = 'reports';
     await db('reports?select=id&limit=1');
     return json(res, 200, {
       status: 'ready',
@@ -20,10 +22,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       hasActivePlaces: places.length > 0,
       message: places.length > 0 ? 'BOR API is ready.' : 'Database is connected but no active places exist yet.',
     });
-  } catch {
+  } catch (error) {
+    const info = error instanceof Error ? error.message : '';
+    const matched = /^Database error (\\d{3})$/.exec(info);
+    const upstreamStatus = matched ? Number(matched[1]) : null;
+    // Do not expose remote response bodies or any environment variable values.
+    console.error('BOR health database failure', { stage, upstreamStatus, kind: upstreamStatus ? 'HTTP' : 'network_or_runtime' });
     return json(res, 503, {
       status: 'database_error',
-      message: 'Unable to query Supabase. Confirm project URL, API key, schema and project availability.',
+      stage,
+      upstreamStatus,
+      hint: upstreamStatus === 401 || upstreamStatus === 403 ? 'Check Supabase secret key and its project.' : upstreamStatus === 404 ? 'Check that SQL schema was run in the correct Supabase project.' : upstreamStatus ? 'Check Supabase API response and database schema.' : 'Check SUPABASE_URL, Supabase availability and Vercel network logs.',
     });
   }
 }
