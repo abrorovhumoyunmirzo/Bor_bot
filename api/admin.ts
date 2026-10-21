@@ -120,26 +120,29 @@ async function fetchOsmVenues():Promise<OsmVenue[]>{
    controller.abort();
  }
 }
-function validatedOsmInput(raw:unknown):OsmVenue[]|null{
+function validatedOsmInput(raw:unknown):{accepted:OsmVenue[];rejected:number}|null{
  if(!Array.isArray(raw)||raw.length<1||raw.length>80)return null;
- const normalized:OsmVenue[]=[];
+ const accepted:OsmVenue[]=[];
  const seen=new Set<string>();
+ let rejected=0;
  for(const item of raw){
-  if(!item||typeof item!=='object')return null;
+  if(!item||typeof item!=='object'){rejected++;continue}
   const p=item as Record<string,unknown>;
   const sourceId=p.sourceId,name=typeof p.name==='string'?p.name.trim():'';
   const district=typeof p.district==='string'?p.district.trim():'';
   const address=typeof p.address==='string'?p.address.trim():'';
   const latitude=p.latitude,longitude=p.longitude;
+  // Catalog OSM uses Tashkent bounds 41.18..41.45 / 69.08..69.49.
+  // A house number alone is a valid OSM address; do not reject the whole batch.
   if(typeof sourceId!=='string'||!/^(node|way|relation)\/[0-9]{1,15}$/.test(sourceId)||
    seen.has(sourceId)||name.length<2||name.length>120||district.length<2||district.length>80||
-   address.length<5||address.length>240||(p.category!=='cafe'&&p.category!=='restaurant')||
+   address.length<1||address.length>240||(p.category!=='cafe'&&p.category!=='restaurant')||
    typeof latitude!=='number'||typeof longitude!=='number'||!Number.isFinite(latitude)||!Number.isFinite(longitude)||
-   latitude<41.20||latitude>41.45||longitude<69.10||longitude>69.45)return null;
+   latitude<41.18||latitude>41.45||longitude<69.08||longitude>69.49){rejected++;continue}
   seen.add(sourceId);
-  normalized.push({sourceId,name,district,address,category:p.category,latitude,longitude});
+  accepted.push({sourceId,name,district,address,category:p.category,latitude,longitude});
  }
- return normalized;
+ return {accepted,rejected};
 }
 
 function geoDistanceMeters(a:{latitude:number;longitude:number},b:{latitude:number;longitude:number}){
@@ -201,16 +204,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     if(req.method==='POST'&&payload?.importAction==='osm'){
-      const selected=validatedOsmInput(payload.venues);
-      if(!selected)return answer(res,400,{error:'Выбери от 1 до 80 мест из результатов поиска OpenStreetMap.'});
+      const checked=validatedOsmInput(payload.venues);
+      if(!checked)return answer(res,400,{error:'Выбери от 1 до 80 мест из результатов поиска OpenStreetMap.'});
+      const selected=checked.accepted;
+      if(!selected.length)return answer(res,400,{error:'Выбранные точки не прошли проверку. Выбери другие заведения.'});
       const existing=await database('places?select=name,latitude,longitude,source_id,source_type&limit=2500');
       const verified=dedupeOsm(selected,existing||[]);
-      if(!verified.length)return answer(res,200,{ok:true,added:0,skipped:selected.length});
+      if(!verified.length)return answer(res,200,{ok:true,added:0,skipped:checked.rejected+selected.length});
       // Imported OSM venues have real names and coordinates but *no* fabricated crowd/Wi-Fi status.
       // Keep address uncertainty explicit until the owner or a visitor verifies it.
       const rows=verified.map(p=>({name:p.name,district:p.district,address:p.address,category:p.category,active:true,latitude:p.latitude,longitude:p.longitude,source_type:'osm',source_id:p.sourceId}));
       await database('places',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(rows)});
-      return answer(res,201,{ok:true,added:rows.length,skipped:selected.length-rows.length});
+      return answer(res,201,{ok:true,added:rows.length,skipped:checked.rejected+selected.length-rows.length});
+    }
+    if(req.method==='PATCH'&&payload?.placeAction){
+      const action=payload.placeAction,id=payload.id;
+      if((action!=='archive'&&action!=='restore')||typeof id!=='string'||!uuid.test(id))
+        return answer(res,400,{error:'Некорректное действие с заведением.'});
+      const result=await database('places?id=eq.'+id,{
+        method:'PATCH',headers:{Prefer:'return=representation'},
+        body:JSON.stringify({active:action==='restore'})
+      });
+      if(!Array.isArray(result)||!result.length)return answer(res,404,{error:'Заведение не найдено.'});
+      // Archive, rather than hard delete: retain reports and allow undo from admin.
+      return answer(res,200,{ok:true,active:action==='restore'});
     }
     if(req.method==='PATCH'&&payload?.suggestionAction){
       const action=payload.suggestionAction;
