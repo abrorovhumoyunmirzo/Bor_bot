@@ -56,10 +56,8 @@ export function VenueMap({ places=[],userLocation=null,selectedId=null,onSelect,
      marker.bindTooltip(items.length+' заведений · Нажми, чтобы приблизить',{direction:'top'});
      marker.on('click',()=>{
       if(map.getZoom()<18){
-       const groupBounds=L.latLngBounds(items.map(p=>[p.latitude!,p.longitude!]));
        const next=Math.min(18,map.getZoom()+2);
-       if(groupBounds.getNorthEast().equals(groupBounds.getSouthWest()))map.setView([centerLat,centerLon],next,{animate:true});
-       else map.fitBounds(groupBounds,{padding:[35,35],maxZoom:next,animate:true});
+       map.setView([centerLat,centerLon],next,{animate:true});
       }else{
        // Identical coordinates cannot be separated by zoom: offer a safe text-only chooser.
        const container=document.createElement('div');
@@ -99,6 +97,7 @@ export function VenueMap({ places=[],userLocation=null,selectedId=null,onSelect,
 
  return <div className={'venue-map-wrap'+(compact?' venue-map-wrap-compact':'')}>
  <div className={(compact?'venue-map venue-map-compact':'venue-map')+(interactive?' venue-map-active':' venue-map-passive')} ref={element} role="application" aria-label="Карта заведений BOR"/>
+ {!compact&&<div className="bor-map-zoom" aria-label="Масштаб карты"><button type="button" aria-label="Приблизить карту" onClick={()=>mapRef.current?.zoomIn()}>+</button><button type="button" aria-label="Отдалить карту" onClick={()=>mapRef.current?.zoomOut()}>−</button></div>}
  <button type="button" className={'map-gesture-toggle'+(interactive?' map-gesture-on':'')} aria-pressed={interactive} onClick={()=>setInteractive(v=>!v)}>{interactive?'✓ Готово · Листать страницу':onPick?'✥ Выбрать точку на карте':'✥ Двигать карту'}</button>
  {!interactive&&<div className="map-scroll-help" aria-hidden="true">Листай страницу как обычно</div>}
  </div>;
