@@ -1,0 +1,49 @@
+import { useEffect, useRef } from 'react';
+import type { Place } from './lib/types';
+
+declare global { interface Window { L?: any } }
+type Position = { latitude: number; longitude: number };
+type Props = { places?: Place[]; userLocation?: Position | null; selectedId?: string | null; onSelect?: (id: string) => void; onPick?: (latitude:number,longitude:number)=>void; picked?: Position | null; compact?: boolean };
+const center:[number,number]=[41.3111,69.2797]; // default city view, never user's position
+const valid=(p: {latitude?:number|null;longitude?:number|null})=>typeof p.latitude==='number'&&typeof p.longitude==='number'&&Number.isFinite(p.latitude)&&Number.isFinite(p.longitude);
+export function VenueMap({ places=[],userLocation=null,selectedId=null,onSelect,onPick,picked=null,compact=false }: Props) {
+ const element=useRef<HTMLDivElement>(null);const mapRef=useRef<any>(null);const layers=useRef<any>(null);
+ useEffect(()=>{
+  if(!element.current||!window.L)return;
+  const L=window.L;
+  const map=L.map(element.current,{zoomControl:false,scrollWheelZoom:false,tap:false}).setView(center,12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',maxZoom:19}).addTo(map);
+  L.control.zoom({position:'bottomright'}).addTo(map);
+  const layer=L.layerGroup().addTo(map);mapRef.current=map;layers.current=layer;
+  const click=(e:any)=>onPick?.(e.latlng.lat,e.latlng.lng);
+  map.on('click',click);
+  const t=setTimeout(()=>map.invalidateSize(),100);
+  return()=>{clearTimeout(t);map.off('click',click);map.remove();mapRef.current=null;layers.current=null};
+ },[Boolean(onPick)]);
+ useEffect(()=>{
+  const map=mapRef.current, L=window.L,layer=layers.current;
+  if(!map||!L||!layer)return;
+  layer.clearLayers();const bounds:any[]=[];
+  for(const place of places){if(!valid(place))continue;
+   const pos:[number,number]=[place.latitude!,place.longitude!];bounds.push(pos);
+   const selected=selectedId===place.id;
+   const color=selected?'#b8ef78':'#2e6140';
+   const marker=L.circleMarker(pos,{radius:selected?11:9,color:'#e7f4df',weight:2,fillColor:color,fillOpacity:1}).addTo(layer);
+   marker.bindTooltip(place.name,{direction:'top',offset:[0,-7]});
+   marker.on('click',()=>onSelect?.(place.id));
+  }
+  if(picked&&valid(picked)){
+   const pos:[number,number]=[picked.latitude,picked.longitude];bounds.push(pos);
+   L.circleMarker(pos,{radius:11,color:'#18291b',weight:3,fillColor:'#b8ef78',fillOpacity:1}).addTo(layer).bindTooltip('Выбранная точка',{permanent:false,direction:'top'});
+  }
+  if(userLocation&&valid(userLocation)){
+   const pos:[number,number]=[userLocation.latitude,userLocation.longitude];
+   L.circleMarker(pos,{radius:7,color:'#ffffff',weight:3,fillColor:'#438dfb',fillOpacity:1}).addTo(layer).bindTooltip('Вы здесь');
+   if(!compact)map.setView(pos,13);
+   else if(bounds.length===0)map.setView(pos,14);
+  } else if(bounds.length>0){
+   map.fitBounds(L.latLngBounds(bounds),{padding:[35,35],maxZoom:compact?16:14});
+  } else map.setView(center,12);
+ },[places,userLocation,picked,selectedId,compact,onSelect]);
+ return <div className={compact?'venue-map venue-map-compact':'venue-map'} ref={element} role="application" aria-label="Карта заведений BOR"/>;
+}
