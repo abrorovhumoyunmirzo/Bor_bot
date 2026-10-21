@@ -1,2 +1,26 @@
 .admin-shell{padding-bottom:40px}.admin-brand{text-decoration:none;font-weight:850;font-size:35px;letter-spacing:-3px;color:#f5faf5}.admin-brand span{color:#b8ef78}.admin-label{font-size:12px;color:#adbaa9}.admin-link{text-decoration:none}.admin-form{background:#1c2521;border:1px solid #3c4a40;border-radius:17px;padding:18px;margin:28px 0 36px}.admin-form-title{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}.admin-form h2{font-size:20px}.admin-form label{display:block;color:#c7d5ca;font-size:12px;font-weight:650;margin:0 0 17px}.admin-form input,.admin-form select,.admin-search{display:block;width:100%;background:#141b18;color:#f3f7f1;border:1px solid #526056;border-radius:11px;padding:14px;margin-top:8px;font-size:14px;min-width:0}.admin-form input::placeholder,.admin-search::placeholder{color:#8d9d90}.admin-form select{appearance:auto}.admin-two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.admin-form .primary{display:flex;align-items:center;justify-content:center;gap:9px;margin-bottom:0}.admin-textbutton{display:flex;align-items:center;gap:5px;border:none;background:none;color:#b8ef78;font-size:12px}.admin-list-heading{display:flex;align-items:center;justify-content:space-between;margin:0 0 14px}.admin-list-heading h2 span{color:#b8ef78;font-size:14px}.admin-search{margin-bottom:17px}.admin-rows{display:grid;gap:8px}.admin-row{width:100%;text-align:left;display:flex;align-items:center;gap:12px;background:#1d2721;color:#eaf0e9;border:1px solid #405044;border-radius:12px;padding:13px}.admin-row-selected{border-color:#b8ef78}.admin-row-icon{display:grid;place-items:center;flex-shrink:0;width:36px;height:36px;background:#314136;border-radius:9px;color:#b8ef78}.admin-row-info{flex:1;min-width:0;display:grid;gap:5px}.admin-row-info strong{font-size:13px}.admin-row-info small{color:#aab8ab;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.admin-pill{font-size:10px;color:#b8ef78;white-space:nowrap}.admin-pill-off{color:#a6ada3}.admin-message{display:flex;align-items:center;gap:9px;padding:11px;border-radius:9px;font-size:12px;margin-bottom:13px}.admin-error{background:#432d2b;color:#ffc7c1}.admin-success{background:#294331;color:#cbf2ca}.admin-muted{color:#b2bdb4;padding:20px 0}
 .admin-auth-info{display:flex;gap:14px;padding:17px;margin:22px 0;border:1px solid #80664b;background:#29251e;color:#f2e7d7;border-radius:14px}.admin-auth-info>svg{flex-shrink:0;color:#e5c88c}.admin-auth-info h2{font-size:17px;margin:0 0 8px}.admin-auth-info p{color:#d4c9b7;font-size:12px;line-height:1.65;margin:0 0 10px}.admin-auth-info strong{color:#f0edda;overflow-wrap:anywhere}.admin-auth-info .secondary{font-size:12px;margin:4px 0 12px}.admin-auth-info .admin-textbutton{padding:8px 0}.admin-form button:disabled{opacity:.45}
+
+
+/* Administration is also a mobile-first Telegram screen. */
+.admin-shell{padding-bottom:max(28px,env(safe-area-inset-bottom))}
+.admin-shell .content{padding-top:17px}
+.admin-shell .back{margin-bottom:14px}
+.admin-shell h1{font-size:30px;margin-bottom:7px}
+.admin-shell .intro{font-size:12px;line-height:1.5;margin-bottom:16px}
+.admin-form{padding:14px;margin:17px 0 25px;border-radius:14px}
+.admin-form-title{margin-bottom:14px}
+.admin-form-title h2{font-size:18px}
+.admin-form label{margin-bottom:12px}
+.admin-form input,.admin-form select,.admin-search{font-size:16px;min-height:48px;padding:11px 12px}
+.admin-form input{margin-top:6px}
+.admin-form select{margin-top:6px}
+.admin-form .primary{min-height:50px}
+.admin-row{min-height:65px;padding:10px 12px}
+.admin-row-info small{white-space:normal;overflow-wrap:anywhere;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.admin-list-heading{margin-bottom:8px}
+.admin-search{margin-bottom:12px}
+.admin-textbutton{min-height:44px;padding:5px 0}
+.admin-auth-info{padding:12px;gap:10px}
+@media(max-width:375px){.admin-two{gap:8px}.admin-two label{font-size:11px}.admin-form{padding:12px}.admin-pill{max-width:62px;white-space:normal;text-align:right}}
+@media(max-width:330px){.admin-two{grid-template-columns:1fr}.admin-row{gap:8px}.admin-label{font-size:10px}}
