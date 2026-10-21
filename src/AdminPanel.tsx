@@ -3,9 +3,9 @@ import { ArrowLeft, Plus, FloppyDisk, ArrowClockwise, Buildings, CheckCircle, Wa
 import { initTelegram, telegram } from './lib/telegram';
 import './admin.css';
 
-type Place = { id: string; name: string; district: string; address: string; category: 'coffee'|'workspace'; active: boolean };
+type Place = { id: string; name: string; district: string; address: string; category: 'coffee'|'workspace'; active: boolean; latitude: number | null; longitude: number | null };
 type Form = Omit<Place, 'id'>;
-const blank: Form = { name: '', district: '', address: '', category: 'coffee', active: true };
+const blank: Form = { name: '', district: '', address: '', category: 'coffee', active: true, latitude: null, longitude: null };
 async function request(method: 'GET'|'POST'|'PATCH', body?: unknown) {
   const initData = telegram()?.initData;
   if (!initData) throw new Error('Открой админ-панель через своего Telegram-бота.');
@@ -36,7 +36,7 @@ export default function AdminPanel() {
   useEffect(() => { initTelegram(); if (telegram()?.initData) { void refresh(); } else { setLoading(false); } }, []);
   function edit(place: Place) {
     setSelected(place.id);
-    setForm({ name: place.name, district: place.district, address: place.address, category: place.category, active: place.active });
+    setForm({ name: place.name, district: place.district, address: place.address, category: place.category, active: place.active, latitude: place.latitude, longitude: place.longitude });
     setNotice(''); setError('');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -45,6 +45,7 @@ export default function AdminPanel() {
     e.preventDefault();
     setBusy(true); setError(''); setNotice('');
     try {
+      if ((form.latitude === null) !== (form.longitude === null)) throw new Error('Для карты нужны и широта, и долгота.');
       await request(selected ? 'PATCH' : 'POST', selected ? { ...form, id: selected } : form);
       setNotice(selected ? 'Изменения сохранены.' : 'Заведение добавлено.');
       await refresh();
@@ -77,6 +78,15 @@ export default function AdminPanel() {
         <div className="admin-two">
           <label>Категория<select value={form.category} onChange={e => setForm(f => ({...f, category: e.target.value as Form['category']}))}><option value="coffee">Кофейня</option><option value="workspace">Рабочее место</option></select></label>
           <label>Публикация<select value={form.active ? 'yes':'no'} onChange={e => setForm(f => ({...f, active: e.target.value === 'yes'}))}><option value="yes">Активно</option><option value="no">Скрыто</option></select></label>
+        </div>
+        <div className="admin-location-box">
+          <div className="admin-location-title"><strong>Точка на карте</strong><span>Необязательно</span></div>
+          <p>Укажи точные координаты входа в заведение из карт. Оба поля заполняются вместе; без них место остаётся в каталоге без маршрута.</p>
+          <div className="admin-two">
+            <label>Широта<input type="number" inputMode="decimal" step="any" min="-90" max="90" placeholder="41.311081" value={form.latitude ?? ''} onChange={e=>setForm(f=>({...f,latitude:e.target.value===''?null:Number(e.target.value)}))}/></label>
+            <label>Долгота<input type="number" inputMode="decimal" step="any" min="-180" max="180" placeholder="69.240562" value={form.longitude ?? ''} onChange={e=>setForm(f=>({...f,longitude:e.target.value===''?null:Number(e.target.value)}))}/></label>
+          </div>
+          {form.latitude!==null&&form.longitude!==null&&<a className="admin-map-preview" target="_blank" rel="noopener noreferrer" href={`https://www.google.com/maps/search/?api=1&query=${form.latitude}%2C${form.longitude}`}>Проверить точку в Google Maps ↗</a>}
         </div>
         {error && <div className="admin-message admin-error" role="alert"><WarningCircle size={19}/>{error}</div>}
         {notice && <div className="admin-message admin-success" role="status"><CheckCircle size={19}/>{notice}</div>}
