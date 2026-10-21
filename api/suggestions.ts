@@ -17,11 +17,17 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
   return json(res,400,{error:'Укажи название, район, адрес и категорию.'});
  try{
   const existing=await db('place_suggestions?select=id&user_id=eq.'+user+'&created_at=gte.'+encodeURIComponent(new Date(Date.now()-86400000).toISOString())+'&limit=5');
+  if(!Array.isArray(existing))throw new Error('Suggestions lookup returned invalid response');
   if(existing.length>=3)return json(res,429,{error:'Не более трёх предложений за сутки. Попробуй позже.'});
-  const saved=await db('place_suggestions',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({user_id:user,name,district,address,category})});
-  return json(res,201,{ok:true,id:saved?.[0]?.id});
+  // Supabase may return an empty body for a successful insert; do not parse it as JSON.
+  await db('place_suggestions',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({user_id:user,name,district,address,category})});
+  return json(res,201,{ok:true});
  }catch(e){
-  if(e instanceof Error&&e.message.includes('409'))return json(res,409,{error:'Ты уже предложил это заведение.'});
-  return json(res,503,{error:'Не удалось отправить предложение. Попробуй позже.'});
+  const message=e instanceof Error?e.message:'';
+  console.error('BOR suggestions failed:',message.replace(/[^a-zA-Z0-9 _-]/g,'').slice(0,120));
+  if(message.includes('409'))return json(res,409,{error:'Ты уже предложил это заведение.'});
+  if(message.includes('404'))return json(res,503,{error:'Сервис предложений ещё не готов к приёму данных. Повтори позже.',code:'suggestions_not_found'});
+  if(message.includes('401')||message.includes('403'))return json(res,503,{error:'Сервер не получил доступ к базе предложений. Сообщи администратору.',code:'db_access'});
+  return json(res,503,{error:'Не удалось сохранить предложение. Попробуй ещё раз.',code:'suggestions_save_failed'});
  }
 }
