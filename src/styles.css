@@ -212,3 +212,15 @@ input,select,textarea{font-size:16px}
 .suggest-screen{overscroll-behavior:contain}
 .suggest-form{scrollbar-width:none}
 .suggest-form::-webkit-scrollbar{display:none}
+
+
+/* Category search: one short swipe row, synchronized with map pins and venue list. */
+.category-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:2px 0 8px}
+.category-toolbar>span{font-size:10px;font-weight:800;letter-spacing:1.3px;color:#a7bbab}
+.category-toolbar button{min-height:36px;border:0;background:transparent;color:#b8ef78;font-size:11px;font-weight:750;padding:4px 0 4px 10px}
+.category-filters{display:flex;align-items:center;gap:7px;overflow-x:auto;scrollbar-width:none;overscroll-behavior-x:contain;scroll-snap-type:x proximity;touch-action:pan-x;margin:0 0 13px;padding:0 0 3px}
+.category-filters::-webkit-scrollbar{display:none}
+.category-filters button{flex:0 0 auto;min-height:44px;white-space:nowrap;scroll-snap-align:start;border:1px solid #526453;border-radius:12px;background:#202b24;color:#d3e0d4;padding:0 13px;font-size:12px;font-weight:650}
+.category-filters button.active{background:#b8ef78;border-color:#b8ef78;color:#18291b;font-weight:800}
+.category-filters button:focus-visible,.category-toolbar button:focus-visible{outline:2px solid #b8ef78;outline-offset:2px}
+@media(max-width:360px){.category-filters button{font-size:11px;padding:0 12px}}
