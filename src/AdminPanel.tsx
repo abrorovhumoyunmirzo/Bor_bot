@@ -33,7 +33,7 @@ export default function AdminPanel() {
     catch (e) { setError(e instanceof Error ? e.message : 'Ошибка загрузки'); }
     finally { setLoading(false); }
   }
-  useEffect(() => { initTelegram(); void refresh(); }, []);
+  useEffect(() => { initTelegram(); if (telegram()?.initData) { void refresh(); } else { setLoading(false); } }, []);
   function edit(place: Place) {
     setSelected(place.id);
     setForm({ name: place.name, district: place.district, address: place.address, category: place.category, active: place.active });
@@ -52,6 +52,7 @@ export default function AdminPanel() {
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка сохранения'); }
     finally { setBusy(false); }
   }
+  const telegramAuthorized = Boolean(telegram()?.initData);
   const filtered = places.filter(p => [p.name, p.district, p.address].some(v => v.toLowerCase().includes(query.toLowerCase())));
   return <div className="shell admin-shell">
     <header className="header"><a href="/" className="admin-brand">bor<span>.</span></a><span className="admin-label">Управление местами</span></header>
@@ -60,6 +61,14 @@ export default function AdminPanel() {
       <div className="eyebrow">BOR / АДМИНИСТРАТОР</div>
       <h1>Заведения</h1>
       <p className="intro">Добавляй только существующие места с проверенными адресами. Изменения сразу сохраняются в Supabase.</p>
+      {!telegramAuthorized && <section className="admin-auth-info" role="status">
+        <WarningCircle size={23}/>
+        <div><h2>Нужен вход через Telegram</h2>
+        <p>Страница открылась, но Telegram не передал подписанные данные пользователя. Такое бывает, если ссылка открыта в Safari, Chrome или встроенном браузере другого приложения.</p>
+        <p>Скопируй ссылку <strong>t.me/bor_city_bot?startapp=admin</strong> и отправь её себе в «Избранное» Telegram. Нажми на ссылку <strong>внутри Telegram</strong> и выбери «Открыть приложение».</p>
+        <button type="button" className="secondary" onClick={async()=>{try{await navigator.clipboard.writeText('https://t.me/bor_city_bot?startapp=admin');setNotice('Ссылка скопирована. Открой её внутри Telegram.')}catch{setError('Не удалось скопировать. Скопируй ссылку вручную.')}}}>Скопировать ссылку для Telegram</button>
+        <button type="button" className="admin-textbutton" onClick={()=>{if(telegram()?.initData){void refresh()}else{setError('Telegram всё ещё не передал данные. Открой ссылку в самом Telegram.')}}}>Проверить вход повторно</button></div>
+      </section>}
       <form className="admin-form" onSubmit={save}>
         <div className="admin-form-title"><h2>{selected ? 'Редактировать место' : 'Новое заведение'}</h2>{selected && <button type="button" className="admin-textbutton" onClick={create}><Plus size={16}/> Новое</button>}</div>
         <label>Название<input required minLength={2} maxLength={120} value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} placeholder="Например, название кофейни"/></label>
@@ -71,7 +80,7 @@ export default function AdminPanel() {
         </div>
         {error && <div className="admin-message admin-error" role="alert"><WarningCircle size={19}/>{error}</div>}
         {notice && <div className="admin-message admin-success" role="status"><CheckCircle size={19}/>{notice}</div>}
-        <button className="primary" disabled={busy || loading} type="submit"><FloppyDisk size={19}/> {busy ? 'Сохраняем…' : selected ? 'Сохранить изменения' : 'Добавить заведение'}</button>
+        <button className="primary" disabled={busy || loading || !telegramAuthorized} type="submit"><FloppyDisk size={19}/> {busy ? 'Сохраняем…' : selected ? 'Сохранить изменения' : 'Добавить заведение'}</button>
       </form>
       <div className="admin-list-heading"><h2>Все заведения <span>{places.length}</span></h2><button type="button" className="icon-btn refresh" aria-label="Обновить список" onClick={() => void refresh()}><ArrowClockwise size={20}/></button></div>
       <input className="admin-search" placeholder="Поиск по названию, району, адресу" value={query} onChange={e=>setQuery(e.target.value)} aria-label="Поиск заведений"/>
