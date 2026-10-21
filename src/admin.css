@@ -90,3 +90,11 @@
 .admin-archive-warning button{min-height:44px;border-radius:10px;border:1px solid #916e6a;background:transparent;color:#f4cfcb;font-weight:700;font-size:12px}
 .admin-archive-warning button:last-child{background:#b96d61;color:#1e1210;border-color:#b96d61}
 .admin-archive-warning button:disabled,.admin-archive-toggle:disabled,.admin-restore-toggle:disabled{opacity:.5}
+
+.admin-quality-summary{display:flex;justify-content:space-between;align-items:center;gap:9px;margin:10px 0 12px;flex-wrap:wrap;color:#c8d8c8;font-size:12px}
+.admin-quality-summary button{border:1px solid #61765d;background:#26362b;color:#c5ecae;border-radius:9px;padding:10px 12px;font-size:11px;min-height:40px}
+.admin-quality-summary button.active{background:#b8ef78;color:#172818}
+.admin-name-options{padding:12px;border:1px solid #526f51;border-radius:11px;background:#233329;margin:2px 0 16px}
+.admin-name-options strong{font-size:12px;color:#d7e9d1}
+.admin-name-options p{font-size:11px;color:#aebfac;line-height:1.5;margin:6px 0 9px}
+.admin-name-options button{border:1px solid #66845c;color:#d7f2cb;border-radius:9px;background:#2d4331;padding:8px 10px;margin:0 5px 6px 0;min-height:38px;font-size:11px}
