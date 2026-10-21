@@ -57,10 +57,16 @@ function parsePlace(body: unknown) {
   const address = typeof input.address === 'string' ? input.address.trim() : '';
   const category = input.category;
   const active = input.active;
+  const latitude = input.latitude === null || input.latitude === undefined || input.latitude === '' ? null : input.latitude;
+  const longitude = input.longitude === null || input.longitude === undefined || input.longitude === '' ? null : input.longitude;
+  const coordinatesValid = (latitude === null && longitude === null) ||
+    (typeof latitude === 'number' && Number.isFinite(latitude) && latitude >= -90 && latitude <= 90 &&
+     typeof longitude === 'number' && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180);
+
   if (name.length < 2 || name.length > 120 || district.length < 2 || district.length > 80 ||
       address.length < 5 || address.length > 240 || !['coffee', 'workspace'].includes(String(category)) ||
-      typeof active !== 'boolean') return null;
-  return { name, district, address, category, active };
+      typeof active !== 'boolean' || !coordinatesValid) return null;
+  return { name, district, address, category, active, latitude, longitude };
 }
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Allow', 'GET, POST, PATCH');
@@ -90,12 +96,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   try {
     if (req.method === 'GET') {
-      const places = await database('places?select=id,name,district,address,category,active,created_at&order=created_at.desc&limit=300');
+      const places = await database('places?select=id,name,district,address,category,latitude,longitude,active,created_at&order=created_at.desc&limit=300');
       return answer(res, 200, { places });
     }
     const payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     const place = parsePlace(payload);
-    if (!place) return answer(res, 400, { error: 'Проверь название, район, адрес, категорию и статус.' });
+    if (!place) return answer(res, 400, { error: 'Проверь название, район, адрес, категорию, статус и координаты (нужны обе либо ни одной).' });
     if (req.method === 'POST') {
       const created = await database('places', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(place) });
       return answer(res, 201, { place: created?.[0] });
