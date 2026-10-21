@@ -2,7 +2,7 @@ import type{VercelRequest,VercelResponse}from '@vercel/node';import crypto from 
 
 import type { Place, Crowd, Wifi } from '../src/lib/types';
 
-type RawPlace = { id: string; name: string; district: string; address: string; category: 'coffee' | 'workspace' | 'cafe' | 'restaurant'; latitude: number | null; longitude: number | null };
+type RawPlace = { id: string; name: string; district: string; address: string; category: 'coffee' | 'workspace' | 'cafe' | 'restaurant'; latitude: number | null; longitude: number | null; source_id?:string|null };
 type Report = { place_id: string; user_id: string; crowd: Crowd; wifi: Wifi; created_at: string };
 const FRESH_MS = 30 * 60 * 1000;
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -10,10 +10,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!configured()) return json(res, 503, { error: 'BOR не подключён к Supabase. Проверь настройки Vercel.' });
   try {
     const since = new Date(Date.now() - FRESH_MS).toISOString();
-    const [places, reports] = await Promise.all([
-      db('places?select=id,name,district,address,category,latitude,longitude&active=eq.true&order=name.asc&limit=1000'),
+    const [placesFirst,placesSecond, reports] = await Promise.all([
+      db('places?select=id,name,district,address,category,latitude,longitude,source_id&active=eq.true&order=id.asc&limit=1000&offset=0'),
+      db('places?select=id,name,district,address,category,latitude,longitude,source_id&active=eq.true&order=id.asc&limit=1000&offset=1000'),
       db('reports?select=place_id,user_id,crowd,wifi,created_at&created_at=gte.' + encodeURIComponent(since) + '&order=created_at.desc&limit=5000'),
-    ]) as [RawPlace[], Report[]];
+    ]) as [RawPlace[],RawPlace[], Report[]];
+    const places=placesFirst.concat(placesSecond);
     const byPlace = new Map<string, Map<string, Report>>();
     for (const report of reports) {
       let users = byPlace.get(report.place_id);
