@@ -7,7 +7,7 @@ type Props = { places?: Place[]; userLocation?: Position | null; selectedId?: st
 const center:[number,number]=[41.3111,69.2797]; // default city view, never user's position
 const valid=(p: {latitude?:number|null;longitude?:number|null})=>typeof p.latitude==='number'&&typeof p.longitude==='number'&&Number.isFinite(p.latitude)&&Number.isFinite(p.longitude);
 export function VenueMap({ places=[],userLocation=null,selectedId=null,onSelect,onPick,picked=null,compact=false }: Props) {
- const element=useRef<HTMLDivElement>(null);const mapRef=useRef<any>(null);const layers=useRef<any>(null);const[interactive,setInteractive]=useState(false);
+ const element=useRef<HTMLDivElement>(null);const mapRef=useRef<any>(null);const layers=useRef<any>(null);const onSelectRef=useRef(onSelect);onSelectRef.current=onSelect;const[interactive,setInteractive]=useState(false);
  useEffect(()=>{
   if(!element.current||!window.L)return;
   const L=window.L;
@@ -31,7 +31,7 @@ export function VenueMap({ places=[],userLocation=null,selectedId=null,onSelect,
    const color=selected?'#b8ef78':'#2e6140';
    const marker=L.circleMarker(pos,{radius:selected?11:9,color:'#e7f4df',weight:2,fillColor:color,fillOpacity:1}).addTo(layer);
    marker.bindTooltip(place.name,{direction:'top',offset:[0,-7]});
-   marker.on('click',()=>onSelect?.(place.id));
+   marker.on('click',()=>onSelectRef.current?.(place.id));
   }
   if(picked&&valid(picked)){
    const pos:[number,number]=[picked.latitude,picked.longitude];bounds.push(pos);
@@ -45,7 +45,7 @@ export function VenueMap({ places=[],userLocation=null,selectedId=null,onSelect,
   } else if(bounds.length>0){
    map.fitBounds(L.latLngBounds(bounds),{padding:[35,35],maxZoom:compact?16:14});
   } else map.setView(center,12);
- },[places,userLocation,picked,selectedId,compact,onSelect]);
+ },[places,userLocation,picked,selectedId,compact]);
  return <div className={'venue-map-wrap'+(compact?' venue-map-wrap-compact':'')}>
  <div className={(compact?'venue-map venue-map-compact':'venue-map')+(interactive?' venue-map-active':' venue-map-passive')} ref={element} role="application" aria-label="Карта заведений BOR"/>
  <button type="button" className={'map-gesture-toggle'+(interactive?' map-gesture-on':'')} aria-pressed={interactive} onClick={()=>setInteractive(v=>!v)}>{interactive?'✓ Готово · Листать страницу':onPick?'✥ Выбрать точку на карте':'✥ Двигать карту'}</button>
