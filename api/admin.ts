@@ -46,7 +46,7 @@ async function database(path: string, init: RequestInit = {}) {
     signal: AbortSignal.timeout(8000),
   });
   if (!response.ok) throw new Error('Database status ' + response.status);
-  return response.status === 204 ? null : response.json();
+  const text=await response.text();return text?JSON.parse(text):null;
 }
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 function parsePlace(body: unknown) {
@@ -68,6 +68,54 @@ function parsePlace(body: unknown) {
       typeof active !== 'boolean' || !coordinatesValid) return null;
   return { name, district, address, category, active, latitude, longitude };
 }
+
+type OsmVenue={sourceId:string;name:string;district:string;address:string;category:'cafe'|'restaurant';latitude:number;longitude:number};
+async function fetchOsmVenues():Promise<OsmVenue[]>{
+ // A bounded downtown Tashkent excerpt avoids heavy requests to the shared Overpass service.
+ const query='[out:json][timeout:18];(nwr["amenity"~"^(restaurant|cafe)$"]["name"](41.245,69.18,41.37,69.365););out center 350;';
+ const endpoints=['https://overpass.kumi.systems/api/interpreter','https://overpass.nchc.org.tw/api/interpreter'];
+ let lastError='OSM недоступен';
+ for(const endpoint of endpoints){
+  try{
+   const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','User-Agent':'BOR-Tashkent-venue-import/1.0'},body:new URLSearchParams({data:query}),signal:AbortSignal.timeout(23000)});
+   if(!response.ok){lastError='OSM ответил '+response.status;continue;}
+   const data=await response.json() as {elements?:Array<{type:string;id:number;lat?:number;lon?:number;center?:{lat:number;lon:number};tags?:Record<string,string>}>};
+   if(!Array.isArray(data.elements))throw Error('Некорректный ответ OSM');
+   const result:OsmVenue[]=[];
+   for(const el of data.elements){
+    const t=el.tags||{},lat=el.lat??el.center?.lat,lon=el.lon??el.center?.lon;
+    const name=(t['name:ru']||t.name||'').trim();
+    if(!name||name.length<2||name.length>120||typeof lat!=='number'||typeof lon!=='number'||!Number.isFinite(lat)||!Number.isFinite(lon))continue;
+    const amenity=t.amenity;
+    if(amenity!=='cafe'&&amenity!=='restaurant')continue;
+    const street=(t['addr:street']||'').trim(),house=(t['addr:housenumber']||'').trim();
+    const fullAddress=[street,house].filter(Boolean).join(', ');
+    const address=(fullAddress||'Адрес не указан в OpenStreetMap').slice(0,240);
+    const district=(t['addr:suburb']||t['addr:district']||'Ташкент').trim().slice(0,80);
+    result.push({sourceId:el.type+'/'+el.id,name,district:district.length>=2?district:'Ташкент',address,category:amenity,latitude:lat,longitude:lon});
+   }
+   return result.slice(0,100);
+  }catch(e){lastError=e instanceof Error?e.name:'OSM недоступен';}
+ }
+ throw new Error('Не удалось получить OpenStreetMap: '+lastError);
+}
+function geoDistanceMeters(a:{latitude:number;longitude:number},b:{latitude:number;longitude:number}){
+ const rad=Math.PI/180,dlat=(a.latitude-b.latitude)*rad,dlon=(a.longitude-b.longitude)*rad;
+ const v=Math.sin(dlat/2)**2+Math.cos(a.latitude*rad)*Math.cos(b.latitude*rad)*Math.sin(dlon/2)**2;
+ return 12742000*Math.asin(Math.min(1,Math.sqrt(v)));
+}
+function dedupeOsm(candidates:OsmVenue[],existing:Array<{name:string;latitude:number|null;longitude:number|null;source_id?:string|null;source_type?:string|null}>){
+ const accepted:OsmVenue[]=[];
+ for(const p of candidates){
+  const duplicate=[...existing,...accepted.map(a=>({...a,source_type:'osm',source_id:a.sourceId}))].some(item=>
+    (item.source_type==='osm'&&item.source_id===p.sourceId)||
+    (item.name.trim().toLocaleLowerCase()===p.name.toLocaleLowerCase()&&item.latitude!==null&&item.longitude!==null&&geoDistanceMeters({latitude:item.latitude,longitude:item.longitude},p)<125)
+  );
+  if(!duplicate)accepted.push(p);
+ }
+ return accepted;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Allow', 'GET, POST, PATCH');
   if (!['GET', 'POST', 'PATCH'].includes(req.method || '')) return answer(res, 405, { error: 'Метод не поддерживается' });
@@ -95,14 +143,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch { return answer(res, 403, { error: 'Недопустимый источник.' }); }
   }
   try {
+    if(req.method==='GET'&&req.query.osmPreview==='1'){
+      const [osm,existing]=await Promise.all([fetchOsmVenues(),database('places?select=name,latitude,longitude,source_id,source_type&limit=2500')]);
+      const options=dedupeOsm(osm,existing||[]);
+      return answer(res,200,{options,totalFound:osm.length,duplicates:osm.length-options.length,attribution:'© OpenStreetMap contributors · ODbL',area:'Центральный Ташкент'});
+    }
     if (req.method === 'GET') {
       const [places,suggestions] = await Promise.all([
-        database('places?select=id,name,district,address,category,latitude,longitude,active,created_at&order=created_at.desc&limit=300'),
+        database('places?select=id,name,district,address,category,latitude,longitude,active,created_at&order=created_at.desc&limit=1000'),
         database('place_suggestions?select=id,name,district,address,category,status,created_at&status=eq.pending&order=created_at.asc&limit=100'),
       ]);
       return answer(res, 200, { places,suggestions });
     }
     const payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    if(req.method==='POST'&&payload?.importAction==='osm'){
+      const ids=payload.sourceIds;
+      if(!Array.isArray(ids)||ids.length<1||ids.length>80||ids.some((id:unknown)=>typeof id!=='string'||!/^(node|way|relation)\/[0-9]{1,15}$/.test(id)))
+        return answer(res,400,{error:'Выбери от 1 до 80 мест из списка.'});
+      const [osm,existing]=await Promise.all([fetchOsmVenues(),database('places?select=name,latitude,longitude,source_id,source_type&limit=2500')]);
+      const selected=new Set(ids);
+      const verified=dedupeOsm(osm.filter(p=>selected.has(p.sourceId)),existing||[]);
+      if(!verified.length)return answer(res,200,{ok:true,added:0,skipped:ids.length});
+      // Imported OSM venues have real names and coordinates but *no* fabricated crowd/Wi-Fi status.
+      // Keep address uncertainty explicit until the owner or a visitor verifies it.
+      const rows=verified.map(p=>({name:p.name,district:p.district,address:p.address,category:p.category,active:true,latitude:p.latitude,longitude:p.longitude,source_type:'osm',source_id:p.sourceId}));
+      await database('places',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(rows)});
+      return answer(res,201,{ok:true,added:rows.length,skipped:ids.length-rows.length});
+    }
     if(req.method==='PATCH'&&payload?.suggestionAction){
       const action=payload.suggestionAction;
       const suggestionId=payload.suggestionId;
