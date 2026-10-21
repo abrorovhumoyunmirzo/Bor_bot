@@ -4,8 +4,9 @@ import { initTelegram, telegram } from './lib/telegram';
 import './admin.css';
 import { VenueMap } from './VenueMap';
 
-type Place = { id: string; name: string; district: string; address: string; category: 'coffee'|'workspace'; active: boolean; latitude: number | null; longitude: number | null };
+type Place = { id: string; name: string; district: string; address: string; category: 'coffee'|'workspace'|'cafe'|'restaurant'; active: boolean; latitude: number | null; longitude: number | null };
 type Form = Omit<Place, 'id'>;
+type Suggestion={id:string;name:string;district:string;address:string;category:Place['category'];created_at:string};
 function readLocation(value: string): { latitude: number; longitude: number } | null {
  const text=value.trim();
  const direct=text.match(/(-?\d{1,2}\.\d+)\s*[,;\s]\s*(-?\d{1,3}\.\d+)/);
@@ -31,6 +32,7 @@ async function request(method: 'GET'|'POST'|'PATCH', body?: unknown) {
 }
 export default function AdminPanel() {
   const [places, setPlaces] = useState<Place[]>([]);
+  const [suggestions,setSuggestions]=useState<Suggestion[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [form, setForm] = useState<Form>(blank);
   const [loading, setLoading] = useState(true);
@@ -43,7 +45,7 @@ export default function AdminPanel() {
   const [locationExpanded,setLocationExpanded]=useState(false);
   async function refresh() {
     setLoading(true); setError('');
-    try { const data = await request('GET'); setPlaces(data.places); }
+    try { const data = await request('GET'); setPlaces(data.places);setSuggestions(data.suggestions||[]); }
     catch (e) { setError(e instanceof Error ? e.message : 'Ошибка загрузки'); }
     finally { setLoading(false); }
   }
@@ -68,6 +70,16 @@ export default function AdminPanel() {
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка сохранения'); }
     finally { setBusy(false); }
   }
+  async function moderate(suggestion:Suggestion,action:'approve'|'reject'){
+    if(busy)return;
+    setBusy(true);setError('');setNotice('');
+    try{
+      await request('PATCH',{suggestionAction:action,suggestionId:suggestion.id});
+      await refresh();
+      setNotice(action==='approve'?'Заведение добавлено в каталог. Проверь координаты в списке ниже.':'Предложение отклонено.');
+    }catch(e){setError(e instanceof Error?e.message:'Ошибка проверки');}
+    finally{setBusy(false)}
+  }
   const telegramAuthorized = Boolean(telegram()?.initData);
   const filtered = places.filter(p => [p.name, p.district, p.address].some(v => v.toLowerCase().includes(query.toLowerCase())));
   return <div className="shell admin-shell">
@@ -85,13 +97,14 @@ export default function AdminPanel() {
         <button type="button" className="secondary" onClick={async()=>{try{await navigator.clipboard.writeText('https://t.me/bor_city_bot?startapp=admin');setNotice('Ссылка скопирована. Открой её внутри Telegram.')}catch{setError('Не удалось скопировать. Скопируй ссылку вручную.')}}}>Скопировать ссылку для Telegram</button>
         <button type="button" className="admin-textbutton" onClick={()=>{if(telegram()?.initData){void refresh()}else{setError('Telegram всё ещё не передал данные. Открой ссылку в самом Telegram.')}}}>Проверить вход повторно</button></div>
       </section>}
+      {telegramAuthorized&&<section className="admin-suggestions"><div className="admin-suggestions-heading"><h2>Предложения пользователей</h2><span>{suggestions.length} ожидают</span></div>{suggestions.length===0?<p className="admin-muted">Пока нет предложений на проверку.</p>:suggestions.map(item=><div className="admin-suggestion" key={item.id}><strong>{item.name}</strong><span>{item.district} · {item.category==='restaurant'?'Ресторан':item.category==='cafe'?'Кафе':item.category==='coffee'?'Кофейня':'Рабочее пространство'}</span><p>{item.address}</p><div className="admin-suggestion-actions"><button type="button" disabled={busy} onClick={()=>void moderate(item,'reject')}>Отклонить</button><button type="button" disabled={busy} onClick={()=>void moderate(item,'approve')}>Добавить в каталог</button></div></div>)}</section>}
       <form className="admin-form" onSubmit={save}>
         <div className="admin-form-title"><h2>{selected ? 'Редактировать место' : 'Новое заведение'}</h2>{selected && <button type="button" className="admin-textbutton" onClick={create}><Plus size={16}/> Новое</button>}</div>
         <label>Название<input required minLength={2} maxLength={120} value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} placeholder="Например, название кофейни"/></label>
         <label>Район<input required minLength={2} maxLength={80} value={form.district} onChange={e => setForm(f => ({...f, district: e.target.value}))} placeholder="Например, Юнусабад"/></label>
         <label>Адрес<input required minLength={5} maxLength={240} value={form.address} onChange={e => setForm(f => ({...f, address: e.target.value}))} placeholder="Улица, дом, ориентир"/></label>
         <div className="admin-two">
-          <label>Категория<select value={form.category} onChange={e => setForm(f => ({...f, category: e.target.value as Form['category']}))}><option value="coffee">Кофейня</option><option value="workspace">Рабочее место</option></select></label>
+          <label>Категория<select value={form.category} onChange={e => setForm(f => ({...f, category: e.target.value as Form['category']}))}><option value="coffee">Кофейня</option><option value="cafe">Кафе</option><option value="restaurant">Ресторан</option><option value="workspace">Рабочее пространство</option></select></label>
           <label>Публикация<select value={form.active ? 'yes':'no'} onChange={e => setForm(f => ({...f, active: e.target.value === 'yes'}))}><option value="yes">Активно</option><option value="no">Скрыто</option></select></label>
         </div>
         <div className="admin-location-box">
