@@ -49,6 +49,8 @@ export default function AdminPanel() {
   const [osmLoading,setOsmLoading]=useState(false);
   const [osmOpen,setOsmOpen]=useState(false);
   const [osmInfo,setOsmInfo]=useState('');
+  const [osmQuery,setOsmQuery]=useState('');
+  const [osmOffset,setOsmOffset]=useState(0);
   async function refresh() {
     setLoading(true); setError('');
     try { const data = await request('GET'); setPlaces(data.places);setSuggestions(data.suggestions||[]); }
@@ -99,7 +101,7 @@ export default function AdminPanel() {
       const existing=new Set(places.filter(p=>p.latitude!==null&&p.longitude!==null).map(p=>p.name.trim().toLowerCase()+'|'+p.latitude!.toFixed(3)+'|'+p.longitude!.toFixed(3)));
       const all=data.options as OsmVenue[];
       const options=all.filter(p=>!existing.has(p.name.trim().toLowerCase()+'|'+p.latitude.toFixed(3)+'|'+p.longitude.toFixed(3)));
-      setOsmResults(options);setOsmSelected([]);
+      setOsmResults(options);setOsmSelected([]);setOsmQuery('');setOsmOffset(0);
       setOsmInfo('В каталоге '+all.length+' мест. Возможных уже добавленных: '+(all.length-options.length)+'. Отметь подходящие заведения; при сохранении BOR повторно проверит дубликаты.');
       setOsmOpen(true);
     }catch(e){setError(e instanceof Error?e.message:'Ошибка загрузки каталога');}
@@ -121,6 +123,8 @@ export default function AdminPanel() {
     finally{setOsmLoading(false)}
   }
   const telegramAuthorized = Boolean(telegram()?.initData);
+  const osmMatches=osmResults.filter(p=>[p.name,p.district,p.address].some(v=>v.toLowerCase().includes(osmQuery.trim().toLowerCase())));
+  const osmVisible=osmMatches.slice(osmOffset,osmOffset+50);
   const filtered = places.filter(p => [p.name, p.district, p.address].some(v => v.toLowerCase().includes(query.toLowerCase())));
   return <div className="shell admin-shell">
     <header className="header"><a href="/" className="admin-brand">bor<span>.</span></a><span className="admin-label">Управление местами</span></header>
@@ -142,8 +146,13 @@ export default function AdminPanel() {
         <button className="admin-osm-load" type="button" disabled={osmLoading} onClick={()=>void osmPreview()}>{osmLoading?'Загружаем…':osmOpen?'Обновить найденные места':'Найти заведения автоматически'}</button>
         {osmInfo&&<p className="admin-osm-note" role="status">{osmInfo}</p>}
         {osmOpen&&<div className="admin-osm-list">
-          {osmResults.length>0?<><div className="admin-osm-select"><strong>{osmSelected.length} выбрано</strong><button type="button" onClick={()=>setOsmSelected(osmSelected.length===Math.min(80,osmResults.length)?[]:osmResults.slice(0,80).map(p=>p.sourceId))}>{osmSelected.length===Math.min(80,osmResults.length)?'Снять выделение':'Выбрать все (до 80)'}</button></div>
-          <div className="admin-osm-items">{osmResults.map(p=><label key={p.sourceId} className="admin-osm-item"><input type="checkbox" checked={osmSelected.includes(p.sourceId)} onChange={e=>setOsmSelected(list=>e.target.checked?[...list,p.sourceId]:list.filter(id=>id!==p.sourceId))} disabled={!osmSelected.includes(p.sourceId)&&osmSelected.length>=80}/><span><strong>{p.name}</strong><small>{p.category==='cafe'?'Кафе':'Ресторан'} · {p.district} · {p.address}</small></span></label>)}</div>
+          {osmResults.length>0?<>
+          <label className="admin-osm-find">Найти заведение по названию или району
+            <input className="admin-search" type="search" value={osmQuery} placeholder="Например, Mirabad, кофе, ресторан" onChange={e=>{setOsmQuery(e.target.value);setOsmOffset(0)}}/>
+          </label>
+          <div className="admin-osm-select"><strong>{osmSelected.length} выбрано · {osmMatches.length} найдено</strong><button type="button" onClick={()=>setOsmSelected(old=>{const next=[...old];for(const p of osmVisible){if(next.length>=80)break;if(!next.includes(p.sourceId))next.push(p.sourceId)}return next})}>Выбрать показанные</button></div>
+          <div className="admin-osm-items">{osmVisible.map(p=><label key={p.sourceId} className="admin-osm-item"><input type="checkbox" checked={osmSelected.includes(p.sourceId)} onChange={e=>setOsmSelected(list=>e.target.checked?[...list,p.sourceId]:list.filter(id=>id!==p.sourceId))} disabled={!osmSelected.includes(p.sourceId)&&osmSelected.length>=80}/><span><strong>{p.name}</strong><small>{p.category==='cafe'?'Кафе':'Ресторан'} · {p.district} · {p.address}</small></span></label>)}</div>
+          {osmMatches.length>50&&<div className="admin-osm-pages"><button type="button" disabled={osmOffset===0} onClick={()=>setOsmOffset(o=>Math.max(0,o-50))}>← Назад</button><span>{osmOffset+1}–{Math.min(osmOffset+50,osmMatches.length)} из {osmMatches.length}</span><button type="button" disabled={osmOffset+50>=osmMatches.length} onClick={()=>setOsmOffset(o=>o+50)}>Дальше →</button></div>}
           <button type="button" className="primary" disabled={osmLoading||!osmSelected.length} onClick={()=>void osmImport()}>Добавить {osmSelected.length} в BOR</button></>:<p className="admin-osm-note">Новых заведений в выбранной области пока нет.</p>}
         </div>}
         <p className="admin-osm-license">Источник: © OpenStreetMap contributors (ODbL). Статусы загруженности и Wi-Fi не импортируются. Проверь адреса после загрузки: некоторые отсутствуют в исходных данных.</p>
