@@ -28,6 +28,7 @@ export async function sendReport(placeId: string, crowd: Crowd, wifi: Wifi) {
     body: JSON.stringify({ placeId, crowd, wifi }),
   });
   const result = await response.json().catch(() => ({ error: 'Ошибка ответа сервера' }));
+  if (response.status === 429 && result?.code === 'already_reported') { const mins = Math.max(1, Math.ceil(Number(result.retryAfterSeconds || 300) / 60)); throw new Error('ALREADY_REPORTED:через ' + mins + ' мин.'); }
   if (!response.ok) throw new Error(result.error || 'Не удалось отправить наблюдение.');
   return result;
 }
