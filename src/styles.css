@@ -167,3 +167,11 @@ input,select,textarea{font-size:16px}
  .map-quick-sheet .map-quick-status span{padding:6px 8px}
 }
 @media(prefers-reduced-motion:reduce){.map-quick-sheet{animation:none}}
+
+
+/* A compact map legend makes real-time crowd conditions readable before tapping a pin. */
+.map-status-legend{display:flex;flex-wrap:wrap;gap:7px 12px;align-items:center;margin:0 0 10px;padding:0 2px;color:#bdcfc0}
+.map-status-legend>span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-size:10px;line-height:1.5}
+.map-legend-dot{width:10px;height:10px;display:inline-block;flex:none;border:1.5px solid #fff;border-radius:50%}
+.map-legend-quiet{background:#59c98c}.map-legend-moderate{background:#efbf58}.map-legend-busy{background:#f17b72}.map-legend-unknown{background:#84968b}.map-legend-conflict{background:#cfa7f4}
+@media(max-width:370px){.map-status-legend{gap:5px 9px}.map-status-legend>span{font-size:9px}}
