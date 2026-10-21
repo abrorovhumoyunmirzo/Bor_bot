@@ -260,3 +260,36 @@ input,select,textarea{font-size:16px}
 .nearby-radius-options button.active{background:#b8ef78;border-color:#b8ef78;color:#1b2a1c}
 .nearby-radius-options button:focus-visible,.nearby-radius-header button:focus-visible{outline:2px solid #b8ef78;outline-offset:2px}
 .nearby-radius-note{font-size:10px;color:#a9bba9;line-height:1.5;margin:10px 0 0}
+
+
+/* BOR map-first home: one main interaction, progressive disclosure for the rest. */
+.content>h1{font-size:clamp(26px,7vw,33px);letter-spacing:-1.1px;margin-bottom:6px}
+.content>.intro{font-size:12px;line-height:1.45;margin-bottom:15px}
+.discovery-search-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;align-items:center;margin-bottom:14px}
+.discovery-search-row .search{min-width:0;height:48px;padding:0 12px}
+.discovery-search-row .search input{font-size:16px}
+.discovery-filter-trigger{display:flex;align-items:center;justify-content:center;gap:5px;min-height:48px;border:1px solid #4b6550;background:#27352b;border-radius:12px;padding:0 10px;color:#d9e7d9;font-size:12px;font-weight:750;white-space:nowrap}
+.discovery-filter-trigger>span{font-size:19px;font-weight:400}
+.discovery-filter-trigger.has-filters{border-color:#b8ef78;color:#c6efa7}
+.discovery-filter-trigger>b{min-width:19px;height:19px;display:grid;place-items:center;background:#b8ef78;color:#1a2b1d;border-radius:50%;font-size:11px}
+.discovery-filter-trigger:focus-visible{outline:2px solid #b8ef78;outline-offset:2px}
+.discovery-active-filters{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:-5px 0 12px;color:#b9ccb9;font-size:11px}
+.discovery-active-filters button{min-height:36px;background:none;border:0;color:#b8ef78;font-size:11px;font-weight:750}
+.discovery-filter-panel{padding:13px 12px 12px;background:#202d25;border:1px solid #455d4c;border-radius:15px;margin:0 0 15px}
+.discovery-filter-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px}
+.discovery-filter-top strong{font-size:14px}
+.discovery-filter-top button{background:none;border:0;color:#b8ef78;font-size:11px;font-weight:750;min-height:40px}
+.discovery-filter-label{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#abc1ad;font-weight:800;margin:12px 0 8px}
+.discovery-filter-panel .chips,.discovery-filter-panel .category-filters,.discovery-filter-panel .quick-filter-bar{padding:0 0 4px;margin:0 0 9px;gap:7px}
+.discovery-filter-panel .chips button,.discovery-filter-panel .category-filters button,.discovery-filter-panel .quick-filter-bar button{min-height:42px;font-size:11px}
+.discovery-city-choice{background:none;border:0;color:#b8ef78;font-size:12px;min-height:40px;padding:5px 0 0}
+.discovery-apply{display:block;width:100%;min-height:47px;margin:12px 0 0;border:0;border-radius:11px;background:#b8ef78;color:#17291a;font-size:13px;font-weight:800}
+.map-toolbar{margin:0 0 9px}
+.map-toolbar strong{font-size:16px}
+.map-switch{margin-bottom:10px}
+.map-legend-details{margin:0 0 10px}
+.map-legend-details>summary{display:list-item;list-style-position:inside;color:#aebcaf;font-size:11px;cursor:pointer;min-height:29px;padding:5px 0}
+.map-legend-details .map-status-legend{padding:8px 3px 2px;margin:0}
+.venue-map-wrap{margin-bottom:11px}
+.suggest-entry{margin:17px 0 2px;background:transparent;border-color:#4c6750;color:#c3ddbf;font-size:11px;min-height:44px}
+@media(max-width:370px){.discovery-search-row{gap:6px}.discovery-filter-trigger{padding:0 8px;font-size:11px}}
