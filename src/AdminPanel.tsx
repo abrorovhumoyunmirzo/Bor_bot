@@ -6,7 +6,7 @@ import { VenueMap } from './VenueMap';
 
 type Place = { id: string; name: string; district: string; address: string; category: 'coffee'|'workspace'|'cafe'|'restaurant'; active: boolean; latitude: number | null; longitude: number | null; source_id?:string|null };
 type Form = Omit<Place, 'id' | 'source_id'>;
-type OsmVenue={sourceId:string;name:string;district:string;address:string;category:'cafe'|'restaurant';latitude:number;longitude:number};
+type Analytics={totalUsers:number;totalOpens:number;todayUsers:number;weekUsers:number;returningUsers:number;daily:{date:string;users:number;opens:number}[]};
 type Suggestion={id:string;name:string;district:string;address:string;category:Place['category'];created_at:string};
 function readLocation(value: string): { latitude: number; longitude: number } | null {
  const text=value.trim();
@@ -33,6 +33,9 @@ async function request(method: 'GET'|'POST'|'PATCH', body?: unknown) {
 }
 export default function AdminPanel() {
   const [places, setPlaces] = useState<Place[]>([]);
+  const [analytics,setAnalytics]=useState<Analytics|null>(null);
+  const [analyticsError,setAnalyticsError]=useState('');
+  const [analyticsLoading,setAnalyticsLoading]=useState(false);
   const [suggestions,setSuggestions]=useState<Suggestion[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [form, setForm] = useState<Form>(blank);
@@ -44,24 +47,29 @@ export default function AdminPanel() {
   const [locationText,setLocationText]=useState('');
   const [locationHelp,setLocationHelp]=useState('');
   const [locationExpanded,setLocationExpanded]=useState(false);
-  const [osmResults,setOsmResults]=useState<OsmVenue[]>([]);
-  const [osmSelected,setOsmSelected]=useState<string[]>([]);
-  const [osmLoading,setOsmLoading]=useState(false);
-  const [osmOpen,setOsmOpen]=useState(false);
-  const [osmInfo,setOsmInfo]=useState('');
-  const [osmQuery,setOsmQuery]=useState('');
-  const [osmOffset,setOsmOffset]=useState(0);
   const [streetHints,setStreetHints]=useState<Record<string,{street:string;distanceMeters:number}>>({});
   const [nameOptions,setNameOptions]=useState<Record<string,string[]>>({});
   const [qualityFilter,setQualityFilter]=useState(false);
   const [archiveConfirm,setArchiveConfirm]=useState(false);
+  async function loadAnalytics(){
+    const initData=telegram()?.initData;
+    if(!initData)return;
+    setAnalyticsLoading(true);setAnalyticsError('');
+    try{
+      const response=await fetch('/api/admin?analytics=1',{headers:{'X-Telegram-Init-Data':initData},cache:'no-store'});
+      const result=await response.json().catch(()=>null);
+      if(!response.ok||!result?.analytics)throw new Error(result?.error||'Статистика пока недоступна');
+      setAnalytics(result.analytics as Analytics);
+    }catch(e){setAnalyticsError(e instanceof Error?e.message:'Ошибка статистики')}
+    finally{setAnalyticsLoading(false)}
+  }
   async function refresh() {
     setLoading(true); setError('');
     try { const data = await request('GET'); setPlaces(data.places);setSuggestions(data.suggestions||[]); }
     catch (e) { setError(e instanceof Error ? e.message : 'Ошибка загрузки'); }
     finally { setLoading(false); }
   }
-  useEffect(() => { initTelegram(); if (telegram()?.initData) { void refresh(); } else { setLoading(false); } }, []);
+  useEffect(() => { initTelegram(); if (telegram()?.initData) { void refresh(); void loadAnalytics(); } else { setLoading(false); } }, []);
   useEffect(()=>{const controller=new AbortController();fetch('/osm-location-hints.json',{signal:controller.signal}).then(r=>r.ok?r.json():null).then(d=>{if(d?.suggestions)setStreetHints(d.suggestions);if(d?.nameOptions)setNameOptions(d.nameOptions)}).catch(()=>{});return()=>controller.abort()},[]);
   function edit(place: Place) {
     setSelected(place.id);setArchiveConfirm(false);
@@ -105,42 +113,6 @@ export default function AdminPanel() {
     }catch(e){setError(e instanceof Error?e.message:'Не удалось изменить публикацию.');}
     finally{setBusy(false)}
   }
-  async function osmPreview(){
-    if(osmLoading)return;
-    setOsmLoading(true);setError('');setOsmInfo('');
-    try{
-      if(!telegram()?.initData)throw new Error('Открой панель через Telegram.');
-      // Local, prebuilt catalogue: opening the app never waits for Overpass anymore.
-      const response=await fetch('/osm-tashkent.json',{cache:'no-store',headers:{Accept:'application/json'}});
-      if(!response.ok)throw new Error('Каталог не опубликован на сервере (HTTP '+response.status+'). Обнови страницу после новой публикации BOR.');
-      const contentType=response.headers.get('content-type')||'';
-      if(!contentType.includes('json'))throw new Error('Сервер вернул страницу вместо каталога. Нужна последняя публикация BOR с исправленным маршрутом JSON.');
-      const data=await response.json().catch(()=>null);
-      if(!Array.isArray(data?.options))throw new Error('Файл каталога повреждён или устарел. Нужна повторная публикация каталога.');
-      const existing=new Set(places.filter(p=>p.latitude!==null&&p.longitude!==null).map(p=>p.name.trim().toLowerCase()+'|'+p.latitude!.toFixed(3)+'|'+p.longitude!.toFixed(3)));
-      const all=data.options as OsmVenue[];
-      const options=all.filter(p=>!existing.has(p.name.trim().toLowerCase()+'|'+p.latitude.toFixed(3)+'|'+p.longitude.toFixed(3)));
-      setOsmResults(options);setOsmSelected([]);setOsmQuery('');setOsmOffset(0);
-      setOsmInfo('В каталоге '+all.length+' мест. Возможных уже добавленных: '+(all.length-options.length)+'. Отметь подходящие заведения; при сохранении BOR повторно проверит дубликаты.');
-      setOsmOpen(true);
-    }catch(e){setError(e instanceof Error?e.message:'Ошибка загрузки каталога');}
-    finally{setOsmLoading(false)}
-  }
-  async function osmImport(){
-    if(osmLoading||osmSelected.length===0)return;
-    setOsmLoading(true);setError('');
-    try{
-      const initData=telegram()?.initData;
-      if(!initData)throw new Error('Открой панель через Telegram.');
-      const response=await fetch('/api/admin',{method:'POST',headers:{'X-Telegram-Init-Data':initData,'Content-Type':'application/json'},body:JSON.stringify({importAction:'osm',venues:osmResults.filter(p=>osmSelected.includes(p.sourceId))})});
-      const data=await response.json().catch(()=>null);
-      if(!response.ok)throw new Error(data?.error||'Не удалось добавить места ('+response.status+').');
-      setOsmInfo('Добавлено: '+data.added+'. Пропущено некорректных точек или дубликатов: '+data.skipped+'.');
-      setOsmResults([]);setOsmSelected([]);
-      await refresh();
-    }catch(e){setError(e instanceof Error?e.message:'Ошибка импорта');}
-    finally{setOsmLoading(false)}
-  }
   const telegramAuthorized = Boolean(telegram()?.initData);
   const osmMatches=osmResults.filter(p=>[p.name,p.district,p.address].some(v=>v.toLowerCase().includes(osmQuery.trim().toLowerCase())));
   const osmVisible=osmMatches.slice(osmOffset,osmOffset+50);
@@ -163,21 +135,14 @@ export default function AdminPanel() {
         <button type="button" className="secondary" onClick={async()=>{try{await navigator.clipboard.writeText('https://t.me/bor_city_bot?startapp=admin');setNotice('Ссылка скопирована. Открой её внутри Telegram.')}catch{setError('Не удалось скопировать. Скопируй ссылку вручную.')}}}>Скопировать ссылку для Telegram</button>
         <button type="button" className="admin-textbutton" onClick={()=>{if(telegram()?.initData){void refresh()}else{setError('Telegram всё ещё не передал данные. Открой ссылку в самом Telegram.')}}}>Проверить вход повторно</button></div>
       </section>}
-      {telegramAuthorized&&<section className="admin-osm">
-        <div className="admin-osm-head"><div><h2>Загрузить места из карты</h2><p>Реальные кафе и рестораны Ташкента из OpenStreetMap — без ручного добавления по одному.</p></div></div>
-        <button className="admin-osm-load" type="button" disabled={osmLoading} onClick={()=>void osmPreview()}>{osmLoading?'Загружаем…':osmOpen?'Обновить найденные места':'Найти заведения автоматически'}</button>
-        {osmInfo&&<p className="admin-osm-note" role="status">{osmInfo}</p>}
-        {osmOpen&&<div className="admin-osm-list">
-          {osmResults.length>0?<>
-          <label className="admin-osm-find">Найти заведение по названию или району
-            <input className="admin-search" type="search" value={osmQuery} placeholder="Например, Mirabad, кофе, ресторан" onChange={e=>{setOsmQuery(e.target.value);setOsmOffset(0)}}/>
-          </label>
-          <div className="admin-osm-select"><strong>{osmSelected.length} выбрано · {osmMatches.length} найдено</strong><button type="button" onClick={()=>setOsmSelected(old=>{const next=[...old];for(const p of osmVisible){if(next.length>=80)break;if(!next.includes(p.sourceId))next.push(p.sourceId)}return next})}>Выбрать показанные</button></div>
-          <div className="admin-osm-items">{osmVisible.map(p=><label key={p.sourceId} className="admin-osm-item"><input type="checkbox" checked={osmSelected.includes(p.sourceId)} onChange={e=>setOsmSelected(list=>e.target.checked?[...list,p.sourceId]:list.filter(id=>id!==p.sourceId))} disabled={!osmSelected.includes(p.sourceId)&&osmSelected.length>=80}/><span><strong>{p.name}</strong><small>{p.category==='cafe'?'Кафе':'Ресторан'} · {p.district} · {p.address}</small></span></label>)}</div>
-          {osmMatches.length>50&&<div className="admin-osm-pages"><button type="button" disabled={osmOffset===0} onClick={()=>setOsmOffset(o=>Math.max(0,o-50))}>← Назад</button><span>{osmOffset+1}–{Math.min(osmOffset+50,osmMatches.length)} из {osmMatches.length}</span><button type="button" disabled={osmOffset+50>=osmMatches.length} onClick={()=>setOsmOffset(o=>o+50)}>Дальше →</button></div>}
-          <button type="button" className="primary" disabled={osmLoading||!osmSelected.length} onClick={()=>void osmImport()}>Добавить {osmSelected.length} в BOR</button></>:<p className="admin-osm-note">Новых заведений в выбранной области пока нет.</p>}
-        </div>}
-        <p className="admin-osm-license">Источник: © OpenStreetMap contributors (ODbL). Статусы загруженности и Wi-Fi не импортируются. Проверь адреса после загрузки: некоторые отсутствуют в исходных данных.</p>
+      {telegramAuthorized&&<section className="admin-analytics">
+        <div className="admin-analytics-head"><div><span className="eyebrow">BOR / АНАЛИТИКА</span><h2>Посетители приложения</h2></div><button type="button" className="admin-analytics-refresh" disabled={analyticsLoading} onClick={()=>void loadAnalytics()}><ArrowClockwise size={16}/> Обновить</button></div>
+        <p className="admin-analytics-note">Учёт начинается после подключения аналитики. Учитываются открытия BOR внутри Telegram, без администратора. Данные не являются статистикой подписчиков бота.</p>
+        {analyticsError&&<p className="admin-analytics-error" role="alert">{analyticsError}</p>}
+        <div className="admin-analytics-grid">
+          {([['Уникальные посетители',analytics?.totalUsers],['Открытия приложения',analytics?.totalOpens],['Посетители сегодня',analytics?.todayUsers],['За последние 7 дней',analytics?.weekUsers],['Вернулись повторно',analytics?.returningUsers]] as const).map(([label,value])=><div className="admin-analytics-metric" key={label}><strong>{analytics?Number(value||0).toLocaleString('ru-RU'):analyticsLoading?'…':'—'}</strong><span>{label}</span></div>)}
+        </div>
+        {analytics?.daily&&<div className="admin-analytics-trend"><h3>Уникальные посетители по дням</h3><div className="admin-analytics-bars">{analytics.daily.map(day=><div key={day.date} className="admin-analytics-day"><span>{day.users}</span><div className="admin-analytics-track"><div style={{height:Math.max(3,Math.round(100*day.users/Math.max(1,...analytics.daily.map(d=>d.users))))+'%'}}/></div><small>{day.date.slice(5)}</small></div>)}</div></div>}
       </section>}
       {telegramAuthorized&&<section className="admin-suggestions"><div className="admin-suggestions-heading"><h2>Предложения пользователей</h2><span>{suggestions.length} ожидают</span></div>{suggestions.length===0?<p className="admin-muted">Пока нет предложений на проверку.</p>:suggestions.map(item=><div className="admin-suggestion" key={item.id}><strong>{item.name}</strong><span>{item.district} · {item.category==='restaurant'?'Ресторан':item.category==='cafe'?'Кафе':item.category==='coffee'?'Кофейня':'Рабочее пространство'}</span><p>{item.address}</p><div className="admin-suggestion-actions"><button type="button" disabled={busy} onClick={()=>void moderate(item,'reject')}>Отклонить</button><button type="button" disabled={busy} onClick={()=>void moderate(item,'approve')}>Добавить в каталог</button></div></div>)}</section>}
       <form className="admin-form" onSubmit={save}>
