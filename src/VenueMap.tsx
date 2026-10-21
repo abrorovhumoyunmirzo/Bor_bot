@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Place } from './lib/types';
 
 declare global { interface Window { L?: any } }
@@ -7,19 +7,20 @@ type Props = { places?: Place[]; userLocation?: Position | null; selectedId?: st
 const center:[number,number]=[41.3111,69.2797]; // default city view, never user's position
 const valid=(p: {latitude?:number|null;longitude?:number|null})=>typeof p.latitude==='number'&&typeof p.longitude==='number'&&Number.isFinite(p.latitude)&&Number.isFinite(p.longitude);
 export function VenueMap({ places=[],userLocation=null,selectedId=null,onSelect,onPick,picked=null,compact=false }: Props) {
- const element=useRef<HTMLDivElement>(null);const mapRef=useRef<any>(null);const layers=useRef<any>(null);
+ const element=useRef<HTMLDivElement>(null);const mapRef=useRef<any>(null);const layers=useRef<any>(null);const[interactive,setInteractive]=useState(false);
  useEffect(()=>{
   if(!element.current||!window.L)return;
   const L=window.L;
-  const map=L.map(element.current,{zoomControl:false,scrollWheelZoom:false,tap:false}).setView(center,12);
+  const map=L.map(element.current,{zoomControl:false,scrollWheelZoom:false,dragging:false,touchZoom:false,doubleClickZoom:false,boxZoom:false,tap:false}).setView(center,12);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',maxZoom:19}).addTo(map);
-  L.control.zoom({position:'bottomright'}).addTo(map);
+
   const layer=L.layerGroup().addTo(map);mapRef.current=map;layers.current=layer;
   const click=(e:any)=>onPick?.(e.latlng.lat,e.latlng.lng);
   map.on('click',click);
   const t=setTimeout(()=>map.invalidateSize(),100);
   return()=>{clearTimeout(t);map.off('click',click);map.remove();mapRef.current=null;layers.current=null};
  },[Boolean(onPick)]);
+ useEffect(()=>{const map=mapRef.current;if(!map)return;if(interactive){map.dragging.enable();map.touchZoom.enable();map.doubleClickZoom.enable();map.boxZoom.enable();setTimeout(()=>map.invalidateSize(),0)}else{map.dragging.disable();map.touchZoom.disable();map.doubleClickZoom.disable();map.boxZoom.disable()}},[interactive]);
  useEffect(()=>{
   const map=mapRef.current, L=window.L,layer=layers.current;
   if(!map||!L||!layer)return;
@@ -45,5 +46,9 @@ export function VenueMap({ places=[],userLocation=null,selectedId=null,onSelect,
    map.fitBounds(L.latLngBounds(bounds),{padding:[35,35],maxZoom:compact?16:14});
   } else map.setView(center,12);
  },[places,userLocation,picked,selectedId,compact,onSelect]);
- return <div className={compact?'venue-map venue-map-compact':'venue-map'} ref={element} role="application" aria-label="Карта заведений BOR"/>;
+ return <div className={'venue-map-wrap'+(compact?' venue-map-wrap-compact':'')}>
+ <div className={(compact?'venue-map venue-map-compact':'venue-map')+(interactive?' venue-map-active':' venue-map-passive')} ref={element} role="application" aria-label="Карта заведений BOR"/>
+ <button type="button" className={'map-gesture-toggle'+(interactive?' map-gesture-on':'')} aria-pressed={interactive} onClick={()=>setInteractive(v=>!v)}>{interactive?'✓ Готово · Листать страницу':onPick?'✥ Выбрать точку на карте':'✥ Двигать карту'}</button>
+ {!interactive&&<div className="map-scroll-help" aria-hidden="true">Листай страницу как обычно</div>}
+ </div>;
 }
