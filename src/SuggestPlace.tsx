@@ -13,8 +13,16 @@ export function SuggestPlace({onClose}:{onClose:()=>void}){
    const initData=telegram()?.initData;
    if(!initData)throw new Error('Открой BOR через Telegram, чтобы предложить заведение.');
    const res=await fetch('/api/suggestions',{method:'POST',headers:{'Content-Type':'application/json','X-Telegram-Init-Data':initData},body:JSON.stringify({name,district,address,category})});
-   const data=await res.json().catch(()=>null);
-   if(!res.ok)throw new Error(data?.error||'Не удалось отправить предложение.');
+   const raw=await res.text();
+   let data:{ok?:boolean;error?:string;code?:string}|null=null;
+   try{data=raw?JSON.parse(raw):null}catch{}
+   if(!res.ok){
+    if(data?.error)throw new Error(data.error);
+    if(res.status===404)throw new Error('Сервис предложений не найден на сервере (404).');
+    if(res.status===401||res.status===403)throw new Error('Нет доступа к отправке (код '+res.status+'). Открой BOR через Telegram.');
+    throw new Error('Сервер временно не принял предложение (HTTP '+res.status+'). Попробуй позже.');
+   }
+   if(data?.ok!==true)throw new Error('Сервер ответил неожиданным образом. Предложение могло сохраниться, проверь у администратора перед повтором.');
    setSuccess(true);
   }catch(e){setError(e instanceof Error?e.message:'Ошибка отправки');}finally{setBusy(false)}
  }
