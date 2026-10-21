@@ -64,7 +64,7 @@ function parsePlace(body: unknown) {
      typeof longitude === 'number' && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180);
 
   if (name.length < 2 || name.length > 120 || district.length < 2 || district.length > 80 ||
-      address.length < 5 || address.length > 240 || !['coffee', 'workspace'].includes(String(category)) ||
+      address.length < 5 || address.length > 240 || !['coffee', 'workspace', 'cafe', 'restaurant'].includes(String(category)) ||
       typeof active !== 'boolean' || !coordinatesValid) return null;
   return { name, district, address, category, active, latitude, longitude };
 }
@@ -96,10 +96,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   try {
     if (req.method === 'GET') {
-      const places = await database('places?select=id,name,district,address,category,latitude,longitude,active,created_at&order=created_at.desc&limit=300');
-      return answer(res, 200, { places });
+      const [places,suggestions] = await Promise.all([
+        database('places?select=id,name,district,address,category,latitude,longitude,active,created_at&order=created_at.desc&limit=300'),
+        database('place_suggestions?select=id,name,district,address,category,status,created_at&status=eq.pending&order=created_at.asc&limit=100'),
+      ]);
+      return answer(res, 200, { places,suggestions });
     }
     const payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    if(req.method==='PATCH'&&payload?.suggestionAction){
+      const action=payload.suggestionAction;
+      const suggestionId=payload.suggestionId;
+      if(!['approve','reject'].includes(action)||typeof suggestionId!=='string'||!uuid.test(suggestionId))
+        return answer(res,400,{error:'Неверное действие.'});
+      const rows=await database('place_suggestions?select=id,name,district,address,category,status&id=eq.'+suggestionId+'&limit=1');
+      const suggestion=rows?.[0];
+      if(!suggestion||suggestion.status!=='pending')return answer(res,409,{error:'Предложение уже рассмотрено.'});
+      if(action==='approve'){
+        const name=encodeURIComponent(suggestion.name);
+        const existing=await database('places?select=id&name=eq.'+name+'&limit=10');
+        if(existing?.some((p:any)=>Boolean(p.id))){
+          // Require manual review when the name already exists, to avoid duplicates.
+          return answer(res,409,{error:'Заведение с таким названием уже есть. Проверь каталог перед добавлением.'});
+        }
+        await database('places',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({name:suggestion.name,district:suggestion.district,address:suggestion.address,category:suggestion.category,active:true,latitude:null,longitude:null})});
+      }
+      await database('place_suggestions?id=eq.'+suggestionId+'&status=eq.pending',{
+        method:'PATCH',headers:{Prefer:'return=representation'},
+        body:JSON.stringify({status:action==='approve'?'approved':'rejected',reviewed_at:new Date().toISOString()}),
+      });
+      return answer(res,200,{ok:true});
+    }
     const place = parsePlace(payload);
     if (!place) return answer(res, 400, { error: 'Проверь название, район, адрес, категорию, статус и координаты (нужны обе либо ни одной).' });
     if (req.method === 'POST') {
