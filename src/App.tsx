@@ -27,7 +27,7 @@ export default function App(){const[tab,setTab]=useState<Tab>('home');const[stre
  finally{setConfirmationBusy(false)}
 }
 function sharePlace(p:Place){
- const link='https://t.me/bor_city_bot?startapp=place_'+p.id.replace(/-/g,'');
+ const link='https://t.me/borcity_bot?startapp=place_'+p.id.replace(/-/g,'');
  const url='https://t.me/share/url?url='+encodeURIComponent(link)+'&text='+encodeURIComponent('Пойдём сюда? '+p.name+' — '+p.district);
  const tg=(window as Window&{Telegram?:{WebApp?:{openTelegramLink?:(url:string)=>void}}}).Telegram?.WebApp;
  if(tg?.openTelegramLink)tg.openTelegramLink(url);else window.open(url,'_blank','noopener,noreferrer');
