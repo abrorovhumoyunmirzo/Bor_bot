@@ -293,3 +293,25 @@ input,select,textarea{font-size:16px}
 .venue-map-wrap{margin-bottom:11px}
 .suggest-entry{margin:17px 0 2px;background:transparent;border-color:#4c6750;color:#c3ddbf;font-size:11px;min-height:44px}
 @media(max-width:370px){.discovery-search-row{gap:6px}.discovery-filter-trigger{padding:0 8px;font-size:11px}}
+
+
+/* BOR useful: lightweight task-first filters */
+.intent-picker{margin:14px 0 16px}
+.intent-heading{font-size:12px;font-weight:750;color:#cde4c7;margin:0 0 10px}
+.intent-options{display:flex;overflow-x:auto;gap:8px;padding:0 0 7px;scroll-snap-type:x proximity;scrollbar-width:thin}
+.intent-options button{flex:0 0 auto;min-width:115px;max-width:153px;min-height:69px;border-radius:13px;border:1px solid #3f5847;background:#22352a;color:#e1f2d8;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:6px;padding:10px 11px;scroll-snap-align:start}
+.intent-options button.selected{background:#334d33;border-color:#b6eb81;box-shadow:inset 0 0 0 1px #b6eb81}
+.intent-options strong{font-size:12px;white-space:nowrap}
+.intent-options small{font-size:10px;color:#afc5ae;line-height:1.2;max-width:145px}
+.intent-explain{font-size:11px;color:#b5c9b4;line-height:1.5;margin:4px 0 0}
+.bor-share{border:1px solid #8cc36e;background:#2d4730;color:#ccefb6;border-radius:12px;padding:12px 14px;font-weight:750;font-size:13px;min-height:45px;width:100%;margin:12px 0}
+.bor-confirm{border:1px solid #425c44;border-radius:13px;background:#213329;padding:13px;margin:15px 0}
+.bor-confirm h2{font-size:16px;margin:0 0 5px}
+.bor-confirm>p{font-size:11px;line-height:1.5;color:#b0c4b3;margin:0 0 12px}
+.bor-confirm-row{display:grid;gap:8px;padding:10px 0;border-top:1px solid #3d5140}
+.bor-confirm-row>span{font-weight:700;font-size:12px}
+.bor-confirm-row>div{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.bor-confirm-row button{min-height:43px;border-radius:10px;border:1px solid #557359;color:#e4efdc;background:#2b4631;font-size:12px;font-weight:700}
+.bor-confirm-row button:disabled{opacity:.5}
+.bor-confirm-row small{font-size:10px;color:#adc1ac}
+.bor-confirm-message{margin:7px 0 0!important;color:#c9f2b9!important}
