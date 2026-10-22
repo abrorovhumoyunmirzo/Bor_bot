@@ -32,3 +32,12 @@ export async function sendReport(placeId: string, crowd: Crowd, wifi: Wifi) {
   if (!response.ok) throw new Error(result.error || 'Не удалось отправить наблюдение.');
   return result;
 }
+
+export async function sendConfirmation(placeId:string,topic:'wifi'|'crowd',vote:'yes'|'no'){
+ const initData=telegram()?.initData;
+ if(!initData)throw new Error('Открой BOR внутри Telegram, чтобы подтвердить данные.');
+ const response=await fetch('/api/confirm',{method:'POST',headers:{'Content-Type':'application/json','X-Telegram-Init-Data':initData},body:JSON.stringify({placeId,topic,vote})});
+ const result=await response.json().catch(()=>null);
+ if(!response.ok)throw new Error(result?.error||'Не удалось сохранить подтверждение.');
+ return result;
+}
