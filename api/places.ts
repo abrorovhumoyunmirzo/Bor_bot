@@ -3,18 +3,19 @@ import type{VercelRequest,VercelResponse}from '@vercel/node';import crypto from 
 import type { Place, Crowd, Wifi } from '../src/lib/types';
 
 type RawPlace = { id: string; name: string; district: string; address: string; category: 'coffee' | 'workspace' | 'cafe' | 'restaurant'; latitude: number | null; longitude: number | null; source_id?:string|null };
-type Report = { place_id: string; user_id: string; crowd: Crowd; wifi: Wifi; created_at: string };
+type Report = { place_id: string; user_id: string; crowd: Crowd; wifi: Wifi; created_at: string };type Confirmation={place_id:string;user_id:string;topic:'wifi'|'crowd';vote:'yes'|'no';created_at:string};
 const FRESH_MS = 30 * 60 * 1000;
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!guard(req, res, 'GET')) return;
   if (!configured()) return json(res, 503, { error: 'BOR не подключён к Supabase. Проверь настройки Vercel.' });
   try {
     const since = new Date(Date.now() - FRESH_MS).toISOString();
-    const [placesFirst,placesSecond, reports] = await Promise.all([
+    const [placesFirst,placesSecond, reports, confirmations] = await Promise.all([
       db('places?select=id,name,district,address,category,latitude,longitude,source_id&active=eq.true&order=id.asc&limit=1000&offset=0'),
       db('places?select=id,name,district,address,category,latitude,longitude,source_id&active=eq.true&order=id.asc&limit=1000&offset=1000'),
       db('reports?select=place_id,user_id,crowd,wifi,created_at&created_at=gte.' + encodeURIComponent(since) + '&order=created_at.desc&limit=5000'),
-    ]) as [RawPlace[],RawPlace[], Report[]];
+      db('place_confirmations?select=place_id,user_id,topic,vote,created_at&created_at=gte.'+encodeURIComponent(since)+'&order=created_at.desc&limit=2000'),
+    ]) as [RawPlace[],RawPlace[], Report[],Confirmation[]];
     const places=placesFirst.concat(placesSecond);
     const byPlace = new Map<string, Map<string, Report>>();
     for (const report of reports) {
@@ -22,6 +23,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!users) { users = new Map<string, Report>(); byPlace.set(report.place_id, users); }
       // Reports arrive newest-first. One vote per unique user in the 30-min window.
       if (!users.has(report.user_id)) users.set(report.user_id, report);
+    }
+    const latestConfirmations=new Map<string,Confirmation>();
+    for(const item of confirmations) {
+      const key=item.place_id+'|'+item.topic+'|'+item.user_id;
+      if(!latestConfirmations.has(key))latestConfirmations.set(key,item);
+    }
+    const confirmationsByPlace=new Map<string,{wifiYes:number;wifiNo:number;crowdYes:number;crowdNo:number}>();
+    for(const item of latestConfirmations.values()){
+      const count=confirmationsByPlace.get(item.place_id)||{wifiYes:0,wifiNo:0,crowdYes:0,crowdNo:0};
+      if(item.topic==='wifi'){if(item.vote==='yes')count.wifiYes++;else count.wifiNo++;}
+      else {if(item.vote==='yes')count.crowdYes++;else count.crowdNo++;}
+      confirmationsByPlace.set(item.place_id,count);
     }
     const result: Place[] = places.map(place => {
       const current = [...(byPlace.get(place.id)?.values() || [])];
@@ -46,6 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         verified,
         crowdAgreement: current.length && !crowdConflict ? current.length : crowdVotes[orderedCrowds[0]],
         wifiVerified,
+        confirmations:confirmationsByPlace.get(place.id)||{wifiYes:0,wifiNo:0,crowdYes:0,crowdNo:0},
         conflict: crowdConflict,
         wifiConflict,
       };
