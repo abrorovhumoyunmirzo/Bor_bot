@@ -129,8 +129,8 @@ export default function AdminPanel() {
         <WarningCircle size={23}/>
         <div><h2>Нужен вход через Telegram</h2>
         <p>Страница открылась, но Telegram не передал подписанные данные пользователя. Такое бывает, если ссылка открыта в Safari, Chrome или встроенном браузере другого приложения.</p>
-        <p>Скопируй ссылку <strong>t.me/bor_city_bot?startapp=admin</strong> и отправь её себе в «Избранное» Telegram. Нажми на ссылку <strong>внутри Telegram</strong> и выбери «Открыть приложение».</p>
-        <button type="button" className="secondary" onClick={async()=>{try{await navigator.clipboard.writeText('https://t.me/bor_city_bot?startapp=admin');setNotice('Ссылка скопирована. Открой её внутри Telegram.')}catch{setError('Не удалось скопировать. Скопируй ссылку вручную.')}}}>Скопировать ссылку для Telegram</button>
+        <p>Скопируй ссылку <strong>t.me/borcity_bot?startapp=admin</strong> и отправь её себе в «Избранное» Telegram. Нажми на ссылку <strong>внутри Telegram</strong> и выбери «Открыть приложение».</p>
+        <button type="button" className="secondary" onClick={async()=>{try{await navigator.clipboard.writeText('https://t.me/borcity_bot?startapp=admin');setNotice('Ссылка скопирована. Открой её внутри Telegram.')}catch{setError('Не удалось скопировать. Скопируй ссылку вручную.')}}}>Скопировать ссылку для Telegram</button>
         <button type="button" className="admin-textbutton" onClick={()=>{if(telegram()?.initData){void refresh()}else{setError('Telegram всё ещё не передал данные. Открой ссылку в самом Telegram.')}}}>Проверить вход повторно</button></div>
       </section>}
       {telegramAuthorized&&<section className="admin-analytics">
